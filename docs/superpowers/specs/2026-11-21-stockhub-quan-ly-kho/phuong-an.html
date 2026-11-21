@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>5. Các phương án · StockHub — Quản lý kho hàng</title>
+<link rel="stylesheet" href="_chung/style.css">
+</head>
+<body>
+<div class="khung">
+  <aside class="ben" data-khung-ben>
+    <a class="ben__ten" href="index.html">← Mục lục</a>
+  </aside>
+  <main class="noi-dung" data-khung-noi-dung>
+    <div class="trong">
+      <header class="dau-trang">
+        <div class="dau-trang__nhan">Spec · Thiết kế</div>
+        <h1>5. Các phương án kỹ thuật</h1>
+        <p class="dau-trang__phu">So sánh đánh giá chi tiết ít nhất 2 phương án cho từng vấn đề kiến trúc trọng yếu của hệ thống.</p>
+      </header>
+
+      <div class="the">
+        <strong>Nguyên tắc đánh giá:</strong> Ưu tiên tính đúng đắn tuyệt đối của 3 quy tắc nghiệp vụ, tính khả thi cao trong môi trường bài tập lớn cá nhân (.NET 10 + React trong Docker) và khả năng kiểm thử tự động hóa cao.
+      </div>
+
+      <!-- Problem 1 -->
+      <h2 id="van-de-1-concurrency">Vấn đề 1: Chống âm kho khi có nhiều yêu cầu xuất đồng thời (Quy tắc 1)</h2>
+      
+      <div class="pa">
+        <div class="pa__dau">
+          <span class="pa__ma">PA-1A</span>
+          <span class="pa__ten">Optimistic Concurrency Control (OCC) với Concurrency Token</span>
+          <span class="muc muc--de-xuat">Đề xuất</span>
+        </div>
+        <p><strong>Mô tả:</strong> Thêm cột <code>RowVersion</code> (byte[] trên SQL Server hoặc <code>uint xmin</code> trên PostgreSQL) vào bảng <code>Inventories</code>. Khi trừ kho, EF Core phát hiện thay đổi qua mệnh đề <code>WHERE RowVersion = @original</code>. Nếu có xung đột, EF Core ném <code>DbUpdateConcurrencyException</code>. Hệ thống bắt lỗi và ném lỗi nghiệp vụ hoặc thử lại nếu tồn kho vẫn đủ.</p>
+        <p><strong>Ưu điểm:</strong> Không giữ khóa hàng DB (deadlock free), thông lượng đọc cao, tích hợp tự nhiên 100% với EF Core 10, dễ viết Unit/Integration Test giả lập xung đột.</p>
+        <p><strong>Nhược điểm:</strong> Khi tải cực lớn cần logic retry ngắn.</p>
+      </div>
+
+      <div class="pa">
+        <div class="pa__dau">
+          <span class="pa__ma">PA-1B</span>
+          <span class="pa__ten">Pessimistic Locking (Khóa bi quan với SELECT ... FOR UPDATE)</span>
+          <span class="muc muc--duong-lui">Đường lui</span>
+        </div>
+        <p><strong>Mô tả:</strong> Sử dụng lệnh SQL thuần túy hoặc Raw SQL trong EF Core: <code>SELECT * FROM Inventories WITH (UPDLOCK, ROWLOCK) WHERE ...</code> để khóa chặt dòng hàng trong suốt thời gian transaction diễn ra.</p>
+        <p><strong>Ưu điểm:</strong> Ngăn chặn xung đột ngay từ đầu, giao dịch thứ hai bắt buộc phải xếp hàng chờ giao dịch thứ nhất hoàn tất.</p>
+        <p><strong>Nhược điểm:</strong> Giữ lock database lâu, dễ gây nghẽn kết nối và deadlock nếu nhiều giao dịch truy xuất chéo nhiều mặt hàng trong cùng phiếu xuất; phụ thuộc sâu vào cú pháp SQL của từng loại Database (SQL Server khác PostgreSQL).</p>
+      </div>
+
+      <div class="pa">
+        <div class="pa__dau">
+          <span class="pa__ma">PA-1C</span>
+          <span class="pa__ten">Kiểm tra tồn kho ở tầng ứng dụng (Application In-Memory Check)</span>
+          <span class="muc muc--da-bo">Đã bỏ</span>
+        </div>
+        <p><strong>Mô tả:</strong> Query lấy số lượng tồn trong C#, dùng lệnh <code>if (stock &gt;= qty)</code> rồi gọi <code>SaveChanges()</code> mà không có khóa DB hay Concurrency Token.</p>
+        <p><strong>Lý do loại bỏ:</strong> <strong>Rất nguy hiểm!</strong> Chắc chắn xảy ra lỗi Race Condition (Time-of-check to time-of-use - TOCTOU). Nếu 2 request cùng đọc lúc tồn kho là 10 và cùng trừ 8, kho sẽ bị âm xuống -6, vi phạm nghiêm trọng Quy tắc 1.</p>
+      </div>
+
+      <!-- Problem 2 -->
+      <h2 id="van-de-2-token">Vấn đề 2: Cơ chế liên kết duyệt chỉ dùng đúng 1 lần (Quy tắc 3)</h2>
+
+      <div class="pa">
+        <div class="pa__dau">
+          <span class="pa__ma">PA-2A</span>
+          <span class="pa__ten">Secure Cryptographic Token lưu bảng ApprovalTokens với SHA-256</span>
+          <span class="muc muc--de-xuat">Đề xuất</span>
+        </div>
+        <p><strong>Mô tả:</strong> Khi yêu cầu duyệt, sinh chuỗi ngẫu nhiên bảo mật 64 ký tự (Base64 URL-safe), băm SHA-256 lưu vào bảng <code>ApprovalTokens</code> với <code>TokenHash</code>, <code>VoucherId</code>, <code>ExpiresAt</code>, <code>UsedAt = null</code>. Khi Kế toán duyệt/từ chối, cập nhật <code>UsedAt = DateTime.UtcNow</code> và đổi trạng thái <code>Voucher</code> trong <strong>cùng 1 DB Transaction</strong>.</p>
+        <p><strong>Ưu điểm:</strong> Bảo mật cao (không lưu token dạng rõ trong DB), kiểm soát thời hạn hết hạn chính xác, ngăn chặn 100% việc tái sử dụng, độc lập với session của người dùng, dễ audit vết truy cập.</p>
+        <p><strong>Nhược điểm:</strong> Cần thêm 1 bảng trong cơ sở dữ liệu.</p>
+      </div>
+
+      <div class="pa">
+        <div class="pa__dau">
+          <span class="pa__ma">PA-2B</span>
+          <span class="pa__ten">Dùng URL gắn VoucherId trực tiếp và kiểm tra trạng thái phiếu</span>
+          <span class="muc muc--da-bo">Đã bỏ</span>
+        </div>
+        <p><strong>Mô tả:</strong> Gửi link dạng <code>/approvals/{voucherId}</code>. Khi Kế toán bấm Duyệt, kiểm tra nếu phiếu đã ở trạng thái <code>Approved</code> thì không cho duyệt nữa.</p>
+        <p><strong>Lý do loại bỏ:</strong> Không an toàn (lỗ hổng IDOR - ai cũng có thể đoán VoucherId để duyệt phiếu); không có cơ chế giới hạn thời gian hiệu lực (expiration); không hỗ trợ việc gửi lại link mới khi link cũ bị hủy.</p>
+      </div>
+
+      <div class="pa">
+        <div class="pa__dau">
+          <span class="pa__ma">PA-2C</span>
+          <span class="pa__ten">JWT Token ký số (Signed JWT) kết hợp Redis Blacklist (JTI)</span>
+          <span class="muc muc--da-bo">Đã bỏ</span>
+        </div>
+        <p><strong>Mô tả:</strong> Tạo một token JWT chứa claim <code>voucherId</code> và <code>jti</code>, sau khi dùng xong thì lưu <code>jti</code> vào Redis cache với TTL.</p>
+        <p><strong>Lý do loại bỏ:</strong> Quá phức tạp và cồng kềnh cho quy mô bài tập lớn cá nhân; yêu cầu cài thêm Redis container làm tăng tải và nguy cơ lỗi cấu hình khi chạy <code>docker compose up</code>.</p>
+      </div>
+
+      <!-- Problem 3 -->
+      <h2 id="van-de-3-kenh-gui">Vấn đề 3: Phương thức cấp phát liên kết duyệt cho Kế toán</h2>
+
+      <div class="pa">
+        <div class="pa__dau">
+          <span class="pa__ma">PA-3A</span>
+          <span class="pa__ten">Chế độ Demo/API trực tiếp (Hiển thị & Copy trên UI)</span>
+          <span class="muc muc--de-xuat">Đề xuất</span>
+        </div>
+        <p><strong>Mô tả:</strong> Khi nhân viên kho bấm nút "Tạo liên kết duyệt", API trả về trực tiếp URL kèm Token. Giao diện hiển thị hộp thoại pop-up chứa đường dẫn kèm nút <strong>"Sao chép liên kết"</strong> (Copy to clipboard) để nhân viên gửi cho Kế toán (hoặc người chấm bài mở ngay trên tab mới).</p>
+        <p><strong>Ưu điểm:</strong> Đúng chuẩn yêu cầu tinh chỉnh của người dùng; đảm bảo 100% chạy trơn tru trong video demo 5–10 phút và khi chạy trong Docker Compose không lo lỗi kết nối Internet / SMTP quota.</p>
+        <p><strong>Nhược điểm:</strong> Không gửi tự động qua email thực tế (được xác định là Out-of-Scope).</p>
+      </div>
+
+      <div class="pa">
+        <div class="pa__dau">
+          <span class="pa__ma">PA-3B</span>
+          <span class="pa__ten">Gửi thư điện tử tự động qua dịch vụ SMTP/MailKit bên ngoài</span>
+          <span class="muc muc--da-bo">Đã bỏ</span>
+        </div>
+        <p><strong>Mô tả:</strong> Cấu hình tài khoản Gmail SMTP để bắn email chứa link đến hòm thư của Kế toán.</p>
+        <p><strong>Lý do loại bỏ:</strong> Google thường xuyên chặn App Password từ các IP lạ của Docker container; nếu mất mạng hoặc sai mật khẩu email thì toàn bộ luồng tạo phiếu bị nghẽn; làm chậm video chấm bài của giảng viên.</p>
+      </div>
+
+      <h2 id="tong-ket-lua-chon">Bảng tổng hợp lựa chọn kỹ thuật tối ưu</h2>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Hạng mục</th>
+              <th>Phương án chốt</th>
+              <th>Lý do cốt lõi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Chống âm kho</td>
+              <td><strong>PA-1A: Optimistic Concurrency Token</strong></td>
+              <td>Đảm bảo 100% Quy tắc 1, chuẩn mẫu thiết kế EF Core 10 Enterprise, không gây deadlock.</td>
+            </tr>
+            <tr>
+              <td>Bảo mật link 1 lần</td>
+              <td><strong>PA-2A: Secure Token SHA-256</strong></td>
+              <td>Đảm bảo 100% Quy tắc 3, khóa đơn nguyên bằng DB Transaction, chống tấn công dò quét URL.</td>
+            </tr>
+            <tr>
+              <td>Kênh gửi liên kết</td>
+              <td><strong>PA-3A: Chế độ Demo/API trực tiếp</strong></td>
+              <td>Thân thiện với môi trường chấm bài, không phụ thuộc mạng ngoài, quay video demo nhanh gọn.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="muc-luc.js"></script>
+<script src="_chung/khung.js"></script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>9. Rủi ro & Migration · StockHub — Quản lý kho hàng</title>
+<link rel="stylesheet" href="_chung/style.css">
+</head>
+<body>
+<div class="khung">
+  <aside class="ben" data-khung-ben>
+    <a class="ben__ten" href="index.html">← Mục lục</a>
+  </aside>
+  <main class="noi-dung" data-khung-noi-dung>
+    <div class="trong">
+      <header class="dau-trang">
+        <div class="dau-trang__nhan">Spec · Triển khai</div>
+        <h1>9. Quản trị Rủi ro Kỹ thuật & Chiến lược Migration</h1>
+        <p class="dau-trang__phu">Nhận diện các rủi ro vi phạm 3 quy tắc bất biến, biện pháp phòng vệ đa tầng và quy trình migration cơ sở dữ liệu an toàn.</p>
+      </header>
+
+      <div class="the the--canh-bao">
+        <strong>Nguyên tắc cốt lõi:</strong> Không bao giờ dựa vào một tầng phòng vệ duy nhất. Toàn bộ 3 quy tắc bất biến phải được bảo vệ đa tầng: từ Frontend UI $\rightarrow$ Application Validator $\rightarrow$ Domain Model $\rightarrow$ EF Core Interceptor $\rightarrow$ Ràng buộc Database Constraint.
+      </div>
+
+      <h2 id="ma-tran-rui-ro">Ma trận Rủi ro & Biện pháp phòng vệ (Risk Matrix)</h2>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Mã rủi ro</th>
+              <th>Mô tả rủi ro</th>
+              <th>Mức độ</th>
+              <th>Tác động</th>
+              <th>Giải pháp phòng vệ đa tầng</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>RSK-01</strong></td>
+              <td><strong>Tranh chấp đồng thời làm âm tồn kho (Quy tắc 1)</strong><br>Hai nhân viên cùng xuất 1 mặt hàng cùng thời điểm.</td>
+              <td>Cao</td>
+              <td>Kho bị âm, sai lệch tồn thực tế, vi phạm quy tắc cốt lõi.</td>
+              <td>
+                1. <strong>Domain:</strong> Kiểm tra <code>Available &gt;= Quantity</code>.<br>
+                2. <strong>EF Core:</strong> Khóa lạc quan qua <code>RowVersion</code>.<br>
+                3. <strong>Database:</strong> Ràng buộc <code>CHECK (QuantityOnHand &gt;= 0)</code> tại mức schema.
+              </td>
+            </tr>
+            <tr>
+              <td><strong>RSK-02</strong></td>
+              <td><strong>Sửa đổi hoặc xóa phiếu đã duyệt (Quy tắc 2)</strong><br>Gửi request trực tiếp qua Postman/Curl để sửa phiếu đã duyệt.</td>
+              <td>Trung bình</td>
+              <td>Mất tính trung thực chứng từ, sai lệch đối chiếu sổ sách.</td>
+              <td>
+                1. <strong>Validation:</strong> FluentValidation chặn ở tầng Handler.<br>
+                2. <strong>Domain:</strong> Entity method ném ngoại lệ nếu <code>Status != Draft</code>.<br>
+                3. <strong>EF Interceptor:</strong> <code>AuditableInterceptor</code> cấm thay đổi trạng thái nếu gốc là <code>Approved</code>.
+              </td>
+            </tr>
+            <tr>
+              <td><strong>RSK-03</strong></td>
+              <td><strong>Tái sử dụng liên kết duyệt của Kế toán (Quy tắc 3)</strong><br>Kế toán click duyệt đúp (double-click) hoặc dùng lại link đã duyệt.</td>
+              <td>Cao</td>
+              <td>Cộng/trừ kho lặp lại 2 lần, làm sai số lượng tồn kho.</td>
+              <td>
+                1. <strong>Giao dịch DB:</strong> Kiểm tra <code>UsedAt == null</code> và gán <code>UsedAt = UtcNow</code> trong cùng 1 transaction.<br>
+                2. <strong>Frontend:</strong> Vô hiệu hóa nút duyệt ngay khi submit.<br>
+                3. <strong>API:</strong> Trả về <code>410 Gone</code> ngay lập tức nếu <code>UsedAt != null</code>.
+              </td>
+            </tr>
+            <tr>
+              <td><strong>RSK-04</strong></td>
+              <td><strong>Lộ token phê duyệt qua nhật ký log</strong><br>Token bí mật bị in vào Serilog/Console dẫn đến bị can thiệp.</td>
+              <td>Thấp</td>
+              <td>Người không có thẩm quyền duyệt hộ chứng từ.</td>
+              <td>
+                1. <strong>Che dữ liệu:</strong> <code>LoggingBehavior</code> loại trừ trường <code>Token</code>.<br>
+                2. <strong>Lưu DB:</strong> Chỉ lưu mã băm <code>SHA-256</code> của token, không lưu token dạng rõ.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="chien-luoc-migration">Chiến lược Migration Cơ sở Dữ liệu (EF Core 10)</h2>
+      <p>Áp dụng quy trình chuẩn theo <code>AGENTS.md §9</code>:</p>
+      
+      <ol class="buoc">
+        <li><strong>Sinh migration có ý nghĩa:</strong> Mỗi thay đổi schema là một migration riêng biệt với tên mô tả rõ ràng (VD: <code>dotnet ef migrations add InitialCreate_StockHub -p src/Infrastructure -s src/WebApi</code>).</li>
+        <li><strong>Kiểm tra mã SQL trước khi áp dụng:</strong> Luôn xuất SQL script bằng lệnh <code>dotnet ef migrations script --idempotent</code> để review cấu trúc bảng, khóa ngoại, chỉ mục index và ràng buộc CHECK.</li>
+        <li><strong>Quy trình Expand & Contract cho các bản cập nhật sau:</strong>
+          <ul>
+            <li><strong>Giai đoạn 1 (Expand):</strong> Thêm cột/bảng mới dưới dạng nullable hoặc có default value. Code mới đọc cột mới hoặc cũ.</li>
+            <li><strong>Giai đoạn 2 (Migrate):</strong> Chuyển đổi dữ liệu cũ sang cấu trúc mới.</li>
+            <li><strong>Giai đoạn 3 (Contract):</strong> Xóa cột cũ sau khi toàn bộ hệ thống đã ổn định.</li>
+          </ul>
+        </li>
+        <li><strong>Khởi tạo dữ liệu tự động trong Docker (Seed Data):</strong>
+          Khi khởi chạy bằng <code>docker compose up --build</code>, tầng WebApi tự động thực hiện <code>await context.Database.MigrateAsync()</code> và nạp dữ liệu mẫu ban đầu (3 tài khoản Admin, Thủ kho, Kế toán; 3 kho hàng; 15 sản phẩm mẫu) để phục vụ chấm bài và quay video tức thì.
+        </li>
+      </ol>
+
+      <h2 id="ke-hoach-rollback">Kế hoạch Rollback & Khôi phục khi có sự cố</h2>
+      <div class="hop-ghi">
+        <strong>Rollback Database:</strong> Do áp dụng Migration idempotent, khi cần hạ cấp có thể chỉ định chính xác phiên bản mong muốn bằng lệnh <code>dotnet ef database update &lt;TargetMigrationName&gt;</code>.<br>
+        <strong>Môi trường Docker:</strong> Khi cần làm sạch toàn bộ dữ liệu để test lại từ đầu: <code>docker compose down -v</code> (xóa volume DB) và <code>docker compose up --build</code> để tự động dựng lại schema và nạp seed data sạch sẽ.
+      </div>
+    </div>
+  </main>
+</div>
+<script src="muc-luc.js"></script>
+<script src="_chung/khung.js"></script>
+</body>
+</html>

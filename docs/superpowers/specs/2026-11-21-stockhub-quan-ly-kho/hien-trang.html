@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>2. Hiện trạng · StockHub — Quản lý kho hàng</title>
+<link rel="stylesheet" href="_chung/style.css">
+</head>
+<body>
+<div class="khung">
+  <aside class="ben" data-khung-ben>
+    <a class="ben__ten" href="index.html">← Mục lục</a>
+  </aside>
+  <main class="noi-dung" data-khung-noi-dung>
+    <div class="trong">
+      <header class="dau-trang">
+        <div class="dau-trang__nhan">Spec · Phân tích</div>
+        <h1>2. Hiện trạng hệ thống</h1>
+        <p class="dau-trang__phu">Đánh giá xuất phát điểm của kho mã nguồn, đối chiếu với các yêu cầu kỹ thuật Enterprise của AGENTS.md.</p>
+      </header>
+
+      <div class="the">
+        <strong>Kết luận hiện trạng:</strong> Dự án ở trạng thái <strong>Greenfield</strong> (khởi tạo từ đầu). Mã nguồn mới có file quy chuẩn <code>AGENTS.md</code> và kho lưu trữ Git cục bộ, chưa có cấu trúc thư mục source code hay cơ sở dữ liệu. Toàn bộ giải pháp sẽ được thiết kế chuẩn chỉnh từ nền móng theo Clean Architecture (.NET 10) và Feature-based (React).
+      </div>
+
+      <h2 id="khao-sat-ma-nguon">Khảo sát mã nguồn hiện có</h2>
+      <p>Kiểm tra thư mục làm việc tại thời điểm khảo sát (21/11/2026):</p>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Thành phần</th>
+              <th>Hiện trạng</th>
+              <th>Bằng chứng thực tế</th>
+              <th>Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Cấu trúc Git</strong></td>
+              <td>Đã khởi tạo repo Git (nhánh <code>master</code>)</td>
+              <td><code>.git/HEAD</code>: ref: refs/heads/master</td>
+              <td>Chưa có remote repository hoặc commit tính năng nào.</td>
+            </tr>
+            <tr>
+              <td><strong>Quy chuẩn dự án</strong></td>
+              <td>Có file quy chuẩn tiêu chuẩn Enterprise</td>
+              <td><code>AGENTS.md:1-595</code></td>
+              <td>Quy định chi tiết Clean Architecture, CQRS MediatR, React Vite, Docker, Test.</td>
+            </tr>
+            <tr>
+              <td><strong>Backend Solution</strong></td>
+              <td>Chưa có file <code>.sln</code> hay dự án <code>.csproj</code></td>
+              <td>Không có file <code>*.sln</code> nào trong thư mục gốc</td>
+              <td>Cần tạo Solution theo cấu trúc 4 tầng: Domain, Application, Infrastructure, WebApi.</td>
+            </tr>
+            <tr>
+              <td><strong>Frontend App</strong></td>
+              <td>Chưa có mã nguồn giao diện</td>
+              <td>Không có <code>package.json</code> hoặc thư mục <code>src/</code></td>
+              <td>Cần khởi tạo React 19 + TypeScript + Vite + Tailwind CSS theo cấu trúc feature-based.</td>
+            </tr>
+            <tr>
+              <td><strong>Đóng gói & CI</strong></td>
+              <td>Chưa có <code>docker-compose.yml</code> và workflow CI</td>
+              <td>Thư mục gốc rỗng ngoại trừ <code>AGENTS.md</code></td>
+              <td>Cần tạo <code>docker-compose.yml</code> và <code>.github/workflows/ci.yml</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="khoang-trong-ky-thuat">Khoảng trống kỹ thuật (Gap Analysis)</h2>
+      <p>Đối chiếu giữa yêu cầu đề tài ĐT07 và quy chuẩn kỹ thuật bắt buộc với xuất phát điểm hiện tại:</p>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Hạng mục</th>
+              <th>Mục tiêu cần đạt</th>
+              <th>Khoảng trống cần bổ sung</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Kiến trúc Backend</strong></td>
+              <td>Clean Architecture (.NET 10), CQRS MediatR, FluentValidation, EF Core 10.</td>
+              <td>Khởi tạo trọn bộ cấu trúc solution, cài đặt packages cần thiết, cấu hình Dependency Injection và Middleware RFC 9457 ProblemDetails.</td>
+            </tr>
+            <tr>
+              <td><strong>Xác thực & Phân quyền</strong></td>
+              <td>JWT Bearer + Refresh Token, Swagger UI có nút Authorize, 3 vai trò (<code>Admin</code>, <code>WarehouseStaff</code>, <code>Accountant</code>).</td>
+              <td>Hiện thực dịch vụ cấp token, bảng lưu RefreshToken, Swagger Gen cấu hình SecurityScheme Type Http Bearer.</td>
+            </tr>
+            <tr>
+              <td><strong>Quy tắc 1: Tồn kho không âm</strong></td>
+              <td>Optimistic Concurrency kiểm tra số lượng khả dụng, bọc Transaction chống race condition.</td>
+              <td>Tạo bảng <code>Inventories</code> với cột <code>RowVersion</code> (hoặc <code>xmin</code>), viết Unit Test kiểm thử 100 tác vụ xuất đồng thời.</td>
+            </tr>
+            <tr>
+              <td><strong>Quy tắc 2: Phiếu đã duyệt cấm sửa</strong></td>
+              <td>Domain State Machine: Chỉ trạng thái <code>Draft</code> mới được sửa/xóa, từ chối mọi yêu cầu nếu đã là <code>Approved</code>/<code>Rejected</code>.</td>
+              <td>Thiết lập quy tắc nghiệp vụ trong Entity <code>Voucher</code>, viết các Unit Test Assert lỗi khi cố tình cập nhật phiếu đã duyệt.</td>
+            </tr>
+            <tr>
+              <td><strong>Quy tắc 3: Link duyệt dùng 1 lần</strong></td>
+              <td>Cơ chế Secure Token có trường <code>UsedAt</code>, xử lý đơn nguyên trong DB Transaction.</td>
+              <td>Thiết kế bảng <code>ApprovalTokens</code>, viết endpoint sinh link và endpoint xác thực duyệt phiếu một lần.</td>
+            </tr>
+            <tr>
+              <td><strong>Frontend React</strong></td>
+              <td>Giao diện điều khiển kho, tạo phiếu, hiển thị nút "Sao chép link duyệt", trang Kế toán duyệt phiếu 1 lần.</td>
+              <td>Dựng layout, TanStack Query, React Hook Form + Zod, axios interceptor hỗ trợ refresh token.</td>
+            </tr>
+            <tr>
+              <td><strong>DevOps & Kiểm thử</strong></td>
+              <td><code>docker compose up --build</code> chạy toàn bộ hệ thống; Unit test có Code Coverage; GitHub Actions CI.</td>
+              <td>Viết Dockerfile cho WebApi và Frontend, file <code>docker-compose.yml</code>, cấu hình test runner (Coverlet) và file workflow YAML.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="ket-luan-trien-khai">Định hướng thiết kế từ hiện trạng</h2>
+      <p>Do là dự án mới hoàn toàn (Greenfield):</p>
+      <ul>
+        <li>Thuận lợi lớn: Không bị vướng nợ kỹ thuật (technical debt), không phải tương thích ngược với cơ sở dữ liệu cũ, có thể tuân thủ 100% chuẩn mực khắt khe của <code>AGENTS.md</code> ngay từ commit đầu tiên.</li>
+        <li>Kế hoạch: Tiến hành phân tích miền (Domain Analysis) $\rightarrow$ Thiết kế API & Database $\rightarrow$ Lập kế hoạch phân rã theo lát dọc (Vertical Slice) để triển khai từng tính năng hoàn chỉnh từ Backend sang Frontend.</li>
+      </ul>
+    </div>
+  </main>
+</div>
+<script src="muc-luc.js"></script>
+<script src="_chung/khung.js"></script>
+</body>
+</html>

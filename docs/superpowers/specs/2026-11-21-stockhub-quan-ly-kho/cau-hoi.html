@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>11. Quyết định đã chốt · StockHub — Quản lý kho hàng</title>
+<link rel="stylesheet" href="_chung/style.css">
+</head>
+<body>
+<div class="khung">
+  <aside class="ben" data-khung-ben>
+    <a class="ben__ten" href="index.html">← Mục lục</a>
+  </aside>
+  <main class="noi-dung" data-khung-noi-dung>
+    <div class="trong">
+      <header class="dau-trang">
+        <div class="dau-trang__nhan">Spec · Quyết định</div>
+        <h1>11. Danh mục Câu hỏi & Quyết định đã chốt</h1>
+        <p class="dau-trang__phu">Ghi nhận các quyết định thiết kế đã thống nhất chính thức giữa Agent và Người dùng theo quy chuẩn AGENTS.md §2.1.</p>
+      </header>
+
+      <div class="the the--moi">
+        <strong>Trạng thái:</strong> Toàn bộ 5 câu hỏi kiến trúc và phạm vi dưới đây đã được <strong>Người dùng phê duyệt và chốt chính thức vào ngày 21/11/2026</strong>. Không còn câu hỏi nào chặn tiến độ thiết kế và lập trình.
+      </div>
+
+      <!-- Q-01 -->
+      <div class="hoi" id="q-01" data-muc data-muc-ten="Q-01: Cơ cấu 3 vai trò">
+        <div class="hoi__dau">
+          <span class="hoi__ma">Q-01</span>
+          <span class="hoi__tieu-de">Cơ cấu vai trò người dùng trong hệ thống</span>
+        </div>
+        <p><strong>Vấn đề & Hạng mục bị chặn:</strong> Xác định các quyền hạn và vai trò cần cài đặt; chặn thiết kế Module Identity và Menu giao diện.</p>
+        <p><strong>Phương án đề xuất ban đầu:</strong> 4 vai trò (Admin, WarehouseManager, WarehouseStaff, Accountant).</p>
+        <p><strong>Quyết định đã chốt (21/11/2026):</strong> Tinh chỉnh rút gọn còn đúng <strong>3 vai trò chính</strong>:
+          <ol style="margin: 8px 0 0 20px;">
+            <li><code>Admin</code>: Quản trị kho, sản phẩm, tài khoản.</li>
+            <li><code>WarehouseStaff</code>: Quản lý xuất nhập kho, tạo phiếu và bấm nút "Tạo liên kết duyệt gửi Kế toán".</li>
+            <li><code>Accountant</code>: Nhận liên kết duyệt 1 lần để duyệt/từ chối tài chính.</li>
+          </ol>
+        </p>
+        <div class="hop-ghi" style="margin-top:8px;">
+          <strong>Lý do:</strong> Tối ưu cho kịch bản quay video demo bài tập lớn cá nhân từ 5–10 phút; thao tác đăng nhập chuyển đổi giữa các vai trò diễn ra nhanh gọn, không rườm rà.
+        </div>
+      </div>
+
+      <!-- Q-02 -->
+      <div class="hoi" id="q-02" data-muc data-muc-ten="Q-02: Cơ chế link duyệt Demo trực tiếp">
+        <div class="hoi__dau">
+          <span class="hoi__ma">Q-02</span>
+          <span class="hoi__tieu-de">Phương thức gửi liên kết phê duyệt cho Kế toán</span>
+        </div>
+        <p><strong>Vấn đề & Hạng mục bị chặn:</strong> Chọn phương thức chuyển giao link duyệt; chặn thiết kế Module Notification và cấu hình Docker mạng.</p>
+        <p><strong>Phương án đề xuất ban đầu:</strong> Hỗ trợ song song gửi email SMTP và chế độ hiển thị link trên giao diện.</p>
+        <p><strong>Quyết định đã chốt (21/11/2026):</strong> <strong>Chỉ dùng Chế độ Demo/API trực tiếp</strong>: Hiển thị hộp thoại kèm nút <em>"Tạo & Sao chép liên kết duyệt"</em> ngay trên giao diện Web + trả về URL qua API. Bỏ qua hoàn toàn việc cấu hình SMTP/MailKit.</p>
+        <div class="hop-ghi" style="margin-top:8px;">
+          <strong>Lý do:</strong> Loại trừ 100% rủi ro lỗi mạng, sai mật khẩu ứng dụng Gmail hoặc bị Google chặn IP khi chấm bài trong môi trường container Docker Compose.
+        </div>
+      </div>
+
+      <!-- Q-03 -->
+      <div class="hoi" id="q-03" data-muc data-muc-ten="Q-03: Chống âm kho bằng Concurrency Token">
+        <div class="hoi__dau">
+          <span class="hoi__ma">Q-03</span>
+          <span class="hoi__tieu-de">Kỹ thuật phòng vệ chống âm kho đồng thời (Quy tắc 1)</span>
+        </div>
+        <p><strong>Vấn đề & Hạng mục bị chặn:</strong> Ngăn chặn Race Condition; chặn thiết kế bảng <code>Inventories</code> và logic trừ kho trong Application Handler.</p>
+        <p><strong>Quyết định đã chốt (21/11/2026):</strong> Sử dụng <strong>Optimistic Concurrency Control (OCC)</strong> với Concurrency Token <code>RowVersion</code> trong EF Core 10, kết hợp Database Transaction và ràng buộc cơ sở dữ liệu <code>CHECK (QuantityOnHand &gt;= 0)</code>.</p>
+        <div class="hop-ghi" style="margin-top:8px;">
+          <strong>Lý do:</strong> Bảo vệ Quy tắc 1 an toàn tuyệt đối ở mọi tầng, không gây deadlock database, dễ dàng viết Unit/Integration test giả lập 20-50 luồng xuất đồng thời.
+        </div>
+      </div>
+
+      <!-- Q-04 -->
+      <div class="hoi" id="q-04" data-muc data-muc-ten="Q-04: Bảo mật token 1 lần băm SHA-256">
+        <div class="hoi__dau">
+          <span class="hoi__ma">Q-04</span>
+          <span class="hoi__tieu-de">Cơ chế bảo vệ liên kết duyệt chỉ dùng 1 lần (Quy tắc 3)</span>
+        </div>
+        <p><strong>Vấn đề & Hạng mục bị chặn:</strong> Chặn thiết kế bảng <code>ApprovalTokens</code> và endpoint duyệt phiếu.</p>
+        <p><strong>Quyết định đã chốt (21/11/2026):</strong> Sinh chuỗi ngẫu nhiên bảo mật cao (64 ký tự URL-safe), băm <code>SHA-256</code> lưu DB. Khi duyệt, cập nhật trạng thái phiếu và gán <code>UsedAt = DateTime.UtcNow</code> trong <strong>cùng 1 giao dịch đơn nguyên</strong>. Nếu mở lại link, trả về <code>HTTP 410 Gone</code> ngay lập tức.</p>
+        <div class="hop-ghi" style="margin-top:8px;">
+          <strong>Lý do:</strong> Đảm bảo tuyệt đối không có kẽ hở duyệt lặp (replay attack); bảo mật thông tin kể cả khi truy vấn trực tiếp vào database.
+        </div>
+      </div>
+
+      <!-- Q-05 -->
+      <div class="hoi" id="q-05" data-muc data-muc-ten="Q-05: Tiêu chuẩn kỹ thuật bắt buộc">
+        <div class="hoi__dau">
+          <span class="hoi__ma">Q-05</span>
+          <span class="hoi__tieu-de">Các tiêu chuẩn kỹ thuật bắt buộc của đồ án</span>
+        </div>
+        <p><strong>Vấn đề & Hạng mục bị chặn:</strong> Chặn thiết kế Swagger, Dockerfile, bộ test và cấu hình GitHub Actions CI.</p>
+        <p><strong>Quyết định đã chốt (21/11/2026):</strong> Bắt buộc hoàn thiện 4 trụ cột kỹ thuật:
+          <ol style="margin: 8px 0 0 20px;">
+            <li>Swagger UI có cấu hình Authorize Bearer JWT + endpoint Refresh Token.</li>
+            <li>Khởi chạy toàn bộ hệ sinh thái bằng 1 lệnh: <code>docker compose up --build</code>.</li>
+            <li>Bộ Unit Test bao phủ $\ge 80\%$ mã nguồn, có báo cáo Code Coverage.</li>
+            <li>Tự động kiểm thử liên tục qua GitHub Actions CI (xanh trước khi bàn giao).</li>
+          </ol>
+        </p>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="muc-luc.js"></script>
+<script src="_chung/khung.js"></script>
+</body>
+</html>

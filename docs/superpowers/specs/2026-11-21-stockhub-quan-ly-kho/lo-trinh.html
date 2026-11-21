@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>12. Lộ trình phân rã · StockHub — Quản lý kho hàng</title>
+<link rel="stylesheet" href="_chung/style.css">
+</head>
+<body>
+<div class="khung">
+  <aside class="ben" data-khung-ben>
+    <a class="ben__ten" href="index.html">← Mục lục</a>
+  </aside>
+  <main class="noi-dung" data-khung-noi-dung>
+    <div class="trong">
+      <header class="dau-trang">
+        <div class="dau-trang__nhan">Spec · Kế hoạch</div>
+        <h1>12. Lộ trình Triển khai & Phân rã Công việc</h1>
+        <p class="dau-trang__phu">Kế hoạch triển khai theo từng lát dọc (Vertical Slice Architecture), thứ tự phụ thuộc và tiêu chí hoàn thành từng giai đoạn.</p>
+      </header>
+
+      <div class="the">
+        <strong>Phương pháp tiếp cận:</strong> Phát triển theo từng <strong>Lát dọc (Vertical Slice)</strong>: Mỗi lát đi xuyên suốt từ Domain $\rightarrow$ Application (CQRS) $\rightarrow$ Infrastructure (EF Core) $\rightarrow$ WebApi Endpoint $\rightarrow$ Test, đảm bảo tính năng chạy độc lập được kiểm chứng ngay trước khi chuyển sang lát tiếp theo.
+      </div>
+
+      <h2 id="cac-giai-doan">Các giai đoạn triển khai (Phases)</h2>
+
+      <!-- Phase 1 -->
+      <h3 id="phase-1">Giai đoạn 1: Nền tảng Backend, Auth & Swagger (Slice 1)</h3>
+      <p>Thiết lập khung dự án Clean Architecture và cơ chế định danh phân quyền.</p>
+      <ul>
+        <li>Khởi tạo Solution .NET 10: <code>Domain</code>, <code>Application</code>, <code>Infrastructure</code>, <code>WebApi</code> và các dự án Test tương ứng.</li>
+        <li>Cài đặt MediatR, FluentValidation, EF Core 10, Serilog.</li>
+        <li>Hiện thực Entity <code>User</code>, <code>RefreshToken</code>; Dịch vụ cấp phát JWT Access Token và Refresh Token Rotation.</li>
+        <li>Cấu hình Swagger UI tích hợp nút Authorize Bearer JWT.</li>
+        <li>Cấu hình Middleware xử lý lỗi toàn cục chuẩn RFC 9457 ProblemDetails.</li>
+        <li><em>Tiêu chí hoàn thành:</em> Đăng nhập và Refresh Token thành công trên Swagger với 3 tài khoản mẫu.</li>
+      </ul>
+
+      <!-- Phase 2 -->
+      <h3 id="phase-2">Giai đoạn 2: Danh mục Kho & Hàng hóa (Slice 2)</h3>
+      <p>Quản lý dữ liệu nền tảng cho kho hàng và sản phẩm.</p>
+      <ul>
+        <li>Domain & EF Core Entity: <code>Warehouse</code>, <code>Product</code>.</li>
+        <li>Features CQRS: <code>CreateWarehouseCommand</code>, <code>GetWarehousesQuery</code>, <code>CreateProductCommand</code>, <code>GetProductsQuery</code>.</li>
+        <li>Cấu hình Soft Delete (<code>IsDeleted</code>) qua EF Core SaveChanges Interceptor.</li>
+        <li><em>Tiêu chí hoàn thành:</em> Tạo được 3 kho hàng (Kho Tổng, Miền Bắc, Miền Nam) và 15 sản phẩm mẫu qua API.</li>
+      </ul>
+
+      <!-- Phase 3 -->
+      <h3 id="phase-3">Giai đoạn 3: Chứng từ kho & Bảo vệ Quy tắc 1 + Quy tắc 2 (Slice 3)</h3>
+      <p>Cài đặt lõi nghiệp vụ kiểm soát tồn kho và bất biến chứng từ.</p>
+      <ul>
+        <li>Domain Entity: <code>Voucher</code>, <code>VoucherDetail</code>, <code>Inventory</code>.</li>
+        <li><strong>Bảo vệ Quy tắc 1 (Tồn kho không âm):</strong> Cấu hình Concurrency Token <code>RowVersion</code> trên <code>Inventory</code>; Viết logic <code>DeductStock</code> kiểm tra số lượng tồn khả dụng; Thêm DB Check Constraint.</li>
+        <li><strong>Bảo vệ Quy tắc 2 (Phiếu đã duyệt cấm sửa):</strong> State Machine chặn sửa/xóa khi <code>Status != Draft</code>; Viết Unit Test assert ngoại lệ khi vi phạm.</li>
+        <li>Features CQRS: <code>CreateDraftVoucherCommand</code>, <code>UpdateDraftVoucherCommand</code>, <code>DeleteDraftVoucherCommand</code>, <code>GetVouchersQuery</code>.</li>
+        <li><em>Tiêu chí hoàn thành:</em> Viết Unit Test và Integration Test chứng minh không thể sửa phiếu đã duyệt và không thể xuất kho âm.</li>
+      </ul>
+
+      <!-- Phase 4 -->
+      <h3 id="phase-4">Giai đoạn 4: Phê duyệt 1 lần & Audit Trail - Quy tắc 3 (Slice 4)</h3>
+      <p>Hoàn thiện cơ chế liên kết phê duyệt cho Kế toán và sổ cái lịch sử.</p>
+      <ul>
+        <li>Domain Entity: <code>ApprovalToken</code>, <code>StockTransactionHistory</code>.</li>
+        <li><strong>Bảo vệ Quy tắc 3 (Link duyệt 1 lần):</strong>
+          <ul>
+            <li>Command <code>CreateApprovalLinkCommand</code>: Chuyển phiếu sang <code>PendingApproval</code>, sinh token SHA-256, trả về URL.</li>
+            <li>Command <code>SettleVoucherApprovalCommand</code>: Kế toán duyệt hoặc từ chối; cập nhật phiếu, kho, và gán <code>UsedAt = UtcNow</code> trong 1 DB Transaction.</li>
+            <li>Kiểm tra nếu token đã có <code>UsedAt</code> thì ném lỗi 410 Gone <code>TOKEN_ALREADY_USED</code>.</li>
+          </ul>
+        </li>
+        <li>Ghi nhật ký biến động kho Append-Only vào bảng <code>StockTransactionHistory</code>.</li>
+        <li><em>Tiêu chí hoàn thành:</em> Thao tác duyệt thành công lần 1, thử duyệt lại lần 2 bị chặn hoàn toàn.</li>
+      </ul>
+
+      <!-- Phase 5 -->
+      <h3 id="phase-5">Giai đoạn 5: Phát triển Giao diện React SPA (Slice 5)</h3>
+      <p>Dựng giao diện người dùng React 19 + TypeScript + Tailwind CSS.</p>
+      <ul>
+        <li>Khởi tạo Vite React App, cài đặt Tailwind CSS, React Router, TanStack Query, React Hook Form, Zod.</li>
+        <li>Cấu hình <code>lib/http.ts</code>: Axios Interceptor tự động gắn Bearer Token và tự động refresh token khi gặp 401.</li>
+        <li>Màn hình Đăng nhập & Đổi vai trò nhanh (phục vụ video demo).</li>
+        <li>Màn hình Quản lý kho, Danh sách chứng từ kho kèm nút <em>"Tạo & Sao chép liên kết duyệt"</em>.</li>
+        <li>Màn hình Kế toán duyệt phiếu 1 lần: Xem bảng kê, nút Phê duyệt / Từ chối.</li>
+        <li>Màn hình Báo lỗi thân thiện khi link duyệt đã hết hạn hoặc đã được sử dụng.</li>
+        <li><em>Tiêu chí hoàn thành:</em> Giao diện hoàn chỉnh, hiển thị tốt trên Desktop và Mobile.</li>
+      </ul>
+
+      <!-- Phase 6 -->
+      <h3 id="phase-6">Giai đoạn 6: Docker Compose, Kiểm thử & CI/CD (Slice 6)</h3>
+      <p>Đóng gói toàn bộ sản phẩm và thiết lập tự động hóa chất lượng.</p>
+      <ul>
+        <li>Viết <code>Dockerfile</code> tối ưu đa tầng (Multi-stage build) cho Backend WebApi và Frontend React.</li>
+        <li>Viết <code>docker-compose.yml</code> liên kết Backend, Frontend và Database PostgreSQL.</li>
+        <li>Cấu hình tự động Migrate Database và nạp Seed Data mẫu khi container khởi động.</li>
+        <li>Viết trọn bộ Unit Test & Integration Test (kiểm thử 3 quy tắc bất biến), đo độ bao phủ đạt $\ge 80\%$ bằng Coverlet.</li>
+        <li>Tạo GitHub Actions Workflow: <code>.github/workflows/ci.yml</code> tự động chạy build và test.</li>
+        <li><em>Tiêu chí hoàn thành:</em> Chạy thành công <code>docker compose up --build</code> từ terminal sạch; CI xanh 100%.</li>
+      </ul>
+
+      <h2 id="bang-phan-ra-cong-viec">Bảng phân rã công việc & Phụ thuộc</h2>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Mã Task</th>
+              <th>Hạng mục công việc</th>
+              <th>Phụ thuộc</th>
+              <th>Dự kiến</th>
+              <th>Mục tiêu nghiệm thu</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>TSK-01</strong></td>
+              <td>Khởi tạo Clean Architecture Solution & Auth JWT + Refresh Token</td>
+              <td>Không</td>
+              <td>0.5 ngày</td>
+              <td>Swagger Authorize chạy tốt, trả token.</td>
+            </tr>
+            <tr>
+              <td><strong>TSK-02</strong></td>
+              <td>Module Warehouses, Products & In-memory/DB Seed</td>
+              <td>TSK-01</td>
+              <td>0.5 ngày</td>
+              <td>API CRUD danh mục, Soft Delete.</td>
+            </tr>
+            <tr>
+              <td><strong>TSK-03</strong></td>
+              <td>Module Vouchers & Cài đặt Quy tắc 1 (Không âm kho) + Quy tắc 2 (Cấm sửa)</td>
+              <td>TSK-02</td>
+              <td>1 ngày</td>
+              <td>Unit Test chặn âm kho và chặn sửa phiếu duyệt.</td>
+            </tr>
+            <tr>
+              <td><strong>TSK-04</strong></td>
+              <td>Module Approval Link 1 lần & Cài đặt Quy tắc 3 + Audit History</td>
+              <td>TSK-03</td>
+              <td>1 ngày</td>
+              <td>Test chặn dùng lại link duyệt lần thứ hai.</td>
+            </tr>
+            <tr>
+              <td><strong>TSK-05</strong></td>
+              <td>Frontend React: Layout, Auth, Quản lý kho & Nút tạo link duyệt</td>
+              <td>TSK-04</td>
+              <td>1 ngày</td>
+              <td>UI nhân viên kho tạo phiếu và lấy link.</td>
+            </tr>
+            <tr>
+              <td><strong>TSK-06</strong></td>
+              <td>Frontend React: Màn hình Kế toán duyệt 1 lần & Màn hình cảnh báo 410</td>
+              <td>TSK-05</td>
+              <td>0.5 ngày</td>
+              <td>Kế toán duyệt thành công và F5 bị chặn.</td>
+            </tr>
+            <tr>
+              <td><strong>TSK-07</strong></td>
+              <td>Đóng gói Docker Compose, Báo cáo Test Coverage $\ge 80\%$, CI GitHub Actions</td>
+              <td>TSK-06</td>
+              <td>0.5 ngày</td>
+              <td><code>docker compose up --build</code> chạy trơn tru, CI xanh.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="muc-luc.js"></script>
+<script src="_chung/khung.js"></script>
+</body>
+</html>

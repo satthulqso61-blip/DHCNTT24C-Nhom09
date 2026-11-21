@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>10. Tiêu chí nghiệm thu · StockHub — Quản lý kho hàng</title>
+<link rel="stylesheet" href="_chung/style.css">
+</head>
+<body>
+<div class="khung">
+  <aside class="ben" data-khung-ben>
+    <a class="ben__ten" href="index.html">← Mục lục</a>
+  </aside>
+  <main class="noi-dung" data-khung-noi-dung>
+    <div class="trong">
+      <header class="dau-trang">
+        <div class="dau-trang__nhan">Spec · Triển khai</div>
+        <h1>10. Tiêu chí Nghiệm thu (Acceptance Criteria)</h1>
+        <p class="dau-trang__phu">Bảng tiêu chí kiểm thử có đánh số, đúng/sai rõ ràng, làm căn cứ nghiệm thu đồ án và quay video demo.</p>
+      </header>
+
+      <div class="the the--moi">
+        <strong>Nguyên tắc nghiệm thu:</strong> Mỗi tiêu chí bắt buộc phải có bài kiểm tra thực tế (Unit Test, Integration Test hoặc kịch bản chạy thật trên UI/API) có kết quả Nhị phân (Pass / Fail rõ ràng).
+      </div>
+
+      <h2 id="nhom-1-ba-quy-tac">Nhóm 1: Nghiệm thu 3 Quy tắc bắt buộc (Trọng số 50%)</h2>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Mã TC</th>
+              <th>Tiêu chí kiểm thử</th>
+              <th>Thao tác thực hiện</th>
+              <th>Kết quả mong đợi (Pass)</th>
+              <th>Kết quả thực tế</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>TC-01</strong></td>
+              <td><strong>Chặn xuất quá tồn kho (Quy tắc 1)</strong></td>
+              <td>Tồn kho SKU A hiện có 5 cái. Lập phiếu xuất với số lượng 6 cái.</td>
+              <td>API từ chối với HTTP 400 kèm mã <code>INSUFFICIENT_STOCK</code>; giao diện báo đỏ cảnh báo thiếu hàng; tồn kho giữ nguyên 5.</td>
+              <td>Chờ kiểm thử</td>
+            </tr>
+            <tr>
+              <td><strong>TC-02</strong></td>
+              <td><strong>Chống âm kho khi xuất đồng thời (Quy tắc 1)</strong></td>
+              <td>Tồn kho có 10 cái. Chạy Integration Test bắn 20 requests xuất kho song song (mỗi request 1 cái).</td>
+              <td>Đúng 10 request thành công, 10 request bị từ chối; tồn kho sau cùng bằng đúng <code>0</code>, tuyệt đối không bị âm; không xảy ra Deadlock.</td>
+              <td>Chờ kiểm thử</td>
+            </tr>
+            <tr>
+              <td><strong>TC-03</strong></td>
+              <td><strong>Cấm sửa phiếu đã duyệt (Quy tắc 2)</strong></td>
+              <td>Lấy ID phiếu ở trạng thái <code>Approved</code>, gửi lệnh HTTP PUT/DELETE sửa thông tin phiếu.</td>
+              <td>Hệ thống trả về HTTP 400 kèm chi tiết <code>VOUCHER_IMMUTABLE</code>; cơ sở dữ liệu không bị thay đổi.</td>
+              <td>Chờ kiểm thử</td>
+            </tr>
+            <tr>
+              <td><strong>TC-04</strong></td>
+              <td><strong>Tạo link duyệt 1 lần và sao chép (Quy tắc 3)</strong></td>
+              <td>Trên phiếu nháp, bấm "Tạo liên kết duyệt".</td>
+              <td>Phiếu chuyển sang <code>PendingApproval</code>; pop-up hiện URL chứa token bảo mật 64 ký tự; bấm sao chép lưu vào clipboard.</td>
+              <td>Chờ kiểm thử</td>
+            </tr>
+            <tr>
+              <td><strong>TC-05</strong></td>
+              <td><strong>Kế toán duyệt thành công qua link lần 1 (Quy tắc 3)</strong></td>
+              <td>Mở URL duyệt trên trình duyệt, kiểm tra thông tin mặt hàng và bấm "Xác nhận Phê duyệt".</td>
+              <td>Phiếu chuyển thành <code>Approved</code>; tồn kho được trừ/cộng chính thức; bảng token cập nhật <code>UsedAt = UtcNow</code>.</td>
+              <td>Chờ kiểm thử</td>
+            </tr>
+            <tr>
+              <td><strong>TC-06</strong></td>
+              <td><strong>Chặn tái sử dụng link duyệt lần 2 (Quy tắc 3)</strong></td>
+              <td>Tải lại (F5) trang duyệt vừa thao tác hoặc paste lại URL cũ vào tab mới và thử bấm duyệt.</td>
+              <td>API trả về HTTP 410 Gone kèm mã <code>TOKEN_ALREADY_USED</code>; màn hình hiển thị cảnh báo đỏ từ chối; tồn kho không bị trừ thêm lần nữa.</td>
+              <td>Chờ kiểm thử</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="nhom-2-chuc-nang">Nhóm 2: Nghiệm thu Phân quyền & Chức năng (Trọng số 25%)</h2>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Mã TC</th>
+              <th>Tiêu chí kiểm thử</th>
+              <th>Thao tác thực hiện</th>
+              <th>Kết quả mong đợi (Pass)</th>
+              <th>Kết quả thực tế</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>TC-07</strong></td>
+              <td><strong>Xác thực 3 vai trò người dùng</strong></td>
+              <td>Đăng nhập lần lượt bằng 3 tài khoản Admin, WarehouseStaff, Accountant.</td>
+              <td>Nhận JWT Token hợp lệ; giao diện hiển thị đúng menu tính năng tương ứng với vai trò.</td>
+              <td>Chờ kiểm thử</td>
+            </tr>
+            <tr>
+              <td><strong>TC-08</strong></td>
+              <td><strong>Quản lý nhiều kho hàng</strong></td>
+              <td>Tạo danh mục gồm 3 kho: Kho Tổng, Kho Miền Bắc, Kho Miền Nam.</td>
+              <td>Danh sách hiển thị chính xác; tồn kho của cùng 1 SKU được tách biệt rõ ràng theo từng kho.</td>
+              <td>Chờ kiểm thử</td>
+            </tr>
+            <tr>
+              <td><strong>TC-09</strong></td>
+              <td><strong>Truy vết lịch sử biến động (Audit Trail)</strong></td>
+              <td>Thực hiện 1 chuỗi thao tác: Nhập kho $\rightarrow$ Xuất kho $\rightarrow$ Điều chuyển kho.</td>
+              <td>Sổ cái <code>StockTransactionHistory</code> ghi lại đầy đủ từng dòng biến động kèm số dư sau giao dịch và ID chứng từ.</td>
+              <td>Chờ kiểm thử</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="nhom-3-ky-thuat">Nhóm 3: Tiêu chuẩn Kỹ thuật Bắt buộc (Trọng số 25%)</h2>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Mã TC</th>
+              <th>Tiêu chuẩn kỹ thuật</th>
+              <th>Cách kiểm tra</th>
+              <th>Kết quả mong đợi (Pass)</th>
+              <th>Kết quả thực tế</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>TC-10</strong></td>
+              <td><strong>Swagger UI hỗ trợ JWT + Refresh Token</strong></td>
+              <td>Mở <code>/swagger</code>, bấm Authorize, dán Bearer token và test gọi API bảo mật.</td>
+              <td>Gọi thành công API có <code>[Authorize]</code>; có endpoint refresh token hoạt động.</td>
+              <td>Chờ kiểm thử</td>
+            </tr>
+            <tr>
+              <td><strong>TC-11</strong></td>
+              <td><strong>Chạy trọn bộ bằng Docker Compose</strong></td>
+              <td>Mở terminal chạy lệnh: <code>docker compose up --build</code> trên môi trường sạch.</td>
+              <td>Backend WebApi, Frontend React và Database cùng khởi động thành công, tự động nạp seed data mẫu.</td>
+              <td>Chờ kiểm thử</td>
+            </tr>
+            <tr>
+              <td><strong>TC-12</strong></td>
+              <td><strong>Độ bao phủ Unit Test (Code Coverage)</strong></td>
+              <td>Chạy lệnh kiểm thử với coverlet: <code>dotnet test /p:CollectCoverage=true</code>.</td>
+              <td>Toàn bộ test vượt qua (100% Pass), tổng tỷ lệ bao phủ code (Coverage) đạt $\ge 80\%$.</td>
+              <td>Chờ kiểm thử</td>
+            </tr>
+            <tr>
+              <td><strong>TC-13</strong></td>
+              <td><strong>Tự động hóa CI (GitHub Actions)</strong></td>
+              <td>Đẩy commit lên GitHub nhánh chính.</td>
+              <td>Workflow GitHub Actions tự động kích hoạt và hoàn thành với trạng thái Xanh (Build & Test Passed).</td>
+              <td>Chờ kiểm thử</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="muc-luc.js"></script>
+<script src="_chung/khung.js"></script>
+</body>
+</html>

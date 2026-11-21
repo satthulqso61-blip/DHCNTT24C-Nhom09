@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>7. Thiết kế dữ liệu (DB) · StockHub — Quản lý kho hàng</title>
+<link rel="stylesheet" href="_chung/style.css">
+</head>
+<body>
+<div class="khung">
+  <aside class="ben" data-khung-ben>
+    <a class="ben__ten" href="index.html">← Mục lục</a>
+  </aside>
+  <main class="noi-dung" data-khung-noi-dung>
+    <div class="trong">
+      <header class="dau-trang">
+        <div class="dau-trang__nhan">Spec · Thiết kế</div>
+        <h1>7. Thiết kế Cơ sở Dữ liệu & Mô hình ERD</h1>
+        <p class="dau-trang__phu">Đặc tả lược đồ cơ sở dữ liệu quan hệ, chỉ mục Index, cơ chế Concurrency Token và bảo đảm toàn vẹn tham chiếu.</p>
+      </header>
+
+      <div class="the">
+        <strong>Chuẩn lưu trữ:</strong> Cơ sở dữ liệu quan hệ (PostgreSQL / SQL Server), toàn bộ khóa chính sử dụng kiểu <code>Guid</code> (UUIDv7 hoặc Sequential Guid) tối ưu phân tán và bảo mật; Tiền tệ lưu kiểu <code>decimal(18,2)</code>; Thời gian đồng nhất chuẩn <code>UTC</code>.
+      </div>
+
+      <h2 id="so-do-erd">Sơ đồ thực thể liên kết (ERD Diagram)</h2>
+      <p>Sơ đồ quan hệ giữa 9 bảng thực thể chính trong hệ thống:</p>
+
+      <div class="so-do-hop">
+        <svg viewBox="0 0 920 480" width="100%" height="460" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <style>
+              .ent-box { fill: #f8fafc; stroke: #3b82f6; stroke-width: 2; rx: 8; }
+              .ent-header { fill: #1e3a8a; }
+              .ent-header-text { fill: #ffffff; font-family: sans-serif; font-size: 13px; font-weight: bold; }
+              .ent-field { fill: #334155; font-family: monospace; font-size: 11px; }
+              .ent-pk { fill: #b45309; font-weight: bold; }
+              .link-line { stroke: #64748b; stroke-width: 1.5; stroke-dasharray: 4,4; }
+            </style>
+          </defs>
+
+          <!-- Warehouses -->
+          <g transform="translate(30, 30)">
+            <rect width="180" height="130" class="ent-box" />
+            <rect width="180" height="26" fill="#2563eb" rx="6" />
+            <text x="12" y="18" class="ent-header-text">Warehouses</text>
+            <text x="12" y="48" class="ent-field ent-pk">PK Id (Guid)</text>
+            <text x="12" y="68" class="ent-field">Code (varchar 20)</text>
+            <text x="12" y="88" class="ent-field">Name (nvarchar 150)</text>
+            <text x="12" y="108" class="ent-field">IsActive (boolean)</text>
+          </g>
+
+          <!-- Products -->
+          <g transform="translate(30, 240)">
+            <rect width="180" height="150" class="ent-box" />
+            <rect width="180" height="26" fill="#2563eb" rx="6" />
+            <text x="12" y="18" class="ent-header-text">Products</text>
+            <text x="12" y="48" class="ent-field ent-pk">PK Id (Guid)</text>
+            <text x="12" y="68" class="ent-field">SKU (varchar 50)</text>
+            <text x="12" y="88" class="ent-field">Name (nvarchar 200)</text>
+            <text x="12" y="108" class="ent-field">Unit (nvarchar 20)</text>
+            <text x="12" y="128" class="ent-field">BasePrice (decimal)</text>
+          </g>
+
+          <!-- Inventories (Intersection) -->
+          <g transform="translate(290, 120)">
+            <rect width="210" height="170" class="ent-box" style="stroke: #d97706;" />
+            <rect width="210" height="26" fill="#d97706" rx="6" />
+            <text x="12" y="18" class="ent-header-text">Inventories (Quy tắc 1)</text>
+            <text x="12" y="48" class="ent-field ent-pk">PK/FK WarehouseId</text>
+            <text x="12" y="68" class="ent-field ent-pk">PK/FK ProductId</text>
+            <text x="12" y="88" class="ent-field" fill="#15803d" font-weight="bold">QuantityOnHand (decimal)</text>
+            <text x="12" y="108" class="ent-field">QuantityReserved (decimal)</text>
+            <text x="12" y="128" class="ent-field" fill="#b91c1c" font-weight="bold">RowVersion (byte[] / xmin)</text>
+            <text x="12" y="148" class="ent-field">UpdatedAt (UTC)</text>
+          </g>
+
+          <!-- Vouchers -->
+          <g transform="translate(580, 30)">
+            <rect width="200" height="190" class="ent-box" style="stroke: #16a34a;" />
+            <rect width="200" height="26" fill="#16a34a" rx="6" />
+            <text x="12" y="18" class="ent-header-text">Vouchers (Quy tắc 2)</text>
+            <text x="12" y="48" class="ent-field ent-pk">PK Id (Guid)</text>
+            <text x="12" y="68" class="ent-field">Code (varchar 30)</text>
+            <text x="12" y="88" class="ent-field">Type (int: 0,1,2)</text>
+            <text x="12" y="108" class="ent-field" fill="#b45309" font-weight="bold">Status (int: Draft..)</text>
+            <text x="12" y="128" class="ent-field">SourceWarehouseId</text>
+            <text x="12" y="148" class="ent-field">TargetWarehouseId</text>
+            <text x="12" y="168" class="ent-field">ApprovedAt (UTC)</text>
+          </g>
+
+          <!-- VoucherDetails -->
+          <g transform="translate(580, 270)">
+            <rect width="200" height="140" class="ent-box" />
+            <rect width="200" height="26" fill="#2563eb" rx="6" />
+            <text x="12" y="18" class="ent-header-text">VoucherDetails</text>
+            <text x="12" y="48" class="ent-field ent-pk">PK Id (Guid)</text>
+            <text x="12" y="68" class="ent-field">FK VoucherId</text>
+            <text x="12" y="88" class="ent-field">FK ProductId</text>
+            <text x="12" y="108" class="ent-field">Quantity (decimal)</text>
+            <text x="12" y="128" class="ent-field">UnitPrice (decimal)</text>
+          </g>
+
+          <!-- ApprovalTokens -->
+          <g transform="translate(290, 340)">
+            <rect width="210" height="130" class="ent-box" style="stroke: #dc2626;" />
+            <rect width="210" height="26" fill="#dc2626" rx="6" />
+            <text x="12" y="18" class="ent-header-text">ApprovalTokens (Quy tắc 3)</text>
+            <text x="12" y="48" class="ent-field ent-pk">PK Id (Guid)</text>
+            <text x="12" y="68" class="ent-field">FK VoucherId</text>
+            <text x="12" y="88" class="ent-field">TokenHash (varchar 64)</text>
+            <text x="12" y="108" class="ent-field" fill="#b91c1c" font-weight="bold">UsedAt (nullable UTC)</text>
+          </g>
+
+          <!-- Connector lines -->
+          <line x1="210" y1="90" x2="290" y2="150" stroke="#64748b" stroke-width="2" />
+          <line x1="210" y1="300" x2="290" y2="240" stroke="#64748b" stroke-width="2" />
+          <line x1="680" y1="220" x2="680" y2="270" stroke="#64748b" stroke-width="2" />
+          <line x1="500" y1="380" x2="580" y2="180" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="3,3" />
+        </svg>
+      </div>
+
+      <h2 id="chi-tiet-cac-bang">Chi tiết lược đồ bảng & Chỉ mục (Indexes)</h2>
+
+      <!-- Inventories -->
+      <h3 id="tbl-inventories">1. Bảng <code>Inventories</code> (Trọng tâm Quy tắc 1)</h3>
+      <p>Lưu trữ số lượng tồn của từng mặt hàng tại mỗi kho. Sử dụng khóa phức hợp và Concurrency Token để chống race condition.</p>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Cột</th>
+              <th>Kiểu dữ liệu</th>
+              <th>Ràng buộc</th>
+              <th>Ý nghĩa</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>WarehouseId</code></td>
+              <td><code>Guid</code></td>
+              <td>PK, FK <code>Warehouses(Id)</code></td>
+              <td>Kho lưu trữ hàng hóa.</td>
+            </tr>
+            <tr>
+              <td><code>ProductId</code></td>
+              <td><code>Guid</code></td>
+              <td>PK, FK <code>Products(Id)</code></td>
+              <td>Sản phẩm tương ứng.</td>
+            </tr>
+            <tr>
+              <td><code>QuantityOnHand</code></td>
+              <td><code>decimal(18,3)</code></td>
+              <td>NOT NULL, CHECK (<code>&gt;= 0</code>)</td>
+              <td>Số lượng thực tế có trong kho. <strong>Ràng buộc CHECK DB bảo vệ Quy tắc 1.</strong></td>
+            </tr>
+            <tr>
+              <td><code>QuantityReserved</code></td>
+              <td><code>decimal(18,3)</code></td>
+              <td>NOT NULL, DEFAULT 0</td>
+              <td>Số lượng đã được giữ cho các phiếu chờ duyệt.</td>
+            </tr>
+            <tr>
+              <td><code>RowVersion</code></td>
+              <td><code>byte[]</code> (hoặc <code>xmin</code>)</td>
+              <td>Concurrency Token</td>
+              <td>Phát hiện xung đột khi nhiều người cùng xuất 1 mặt hàng cùng thời điểm.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Vouchers -->
+      <h3 id="tbl-vouchers">2. Bảng <code>Vouchers</code> (Trọng tâm Quy tắc 2)</h3>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Cột</th>
+              <th>Kiểu dữ liệu</th>
+              <th>Ràng buộc</th>
+              <th>Ý nghĩa</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>Id</code></td>
+              <td><code>Guid</code></td>
+              <td>PK</td>
+              <td>Khóa chính chứng từ.</td>
+            </tr>
+            <tr>
+              <td><code>Code</code></td>
+              <td><code>varchar(30)</code></td>
+              <td>NOT NULL, UNIQUE INDEX</td>
+              <td>Mã phiếu không trùng (VD: <code>PX-20261121-0001</code>).</td>
+            </tr>
+            <tr>
+              <td><code>Type</code></td>
+              <td><code>int</code></td>
+              <td>NOT NULL</td>
+              <td><code>0</code>: Nhập kho (Receipt), <code>1</code>: Xuất kho (Issue), <code>2</code>: Điều chuyển (Transfer).</td>
+            </tr>
+            <tr>
+              <td><code>Status</code></td>
+              <td><code>int</code></td>
+              <td>NOT NULL</td>
+              <td><code>0</code>: Draft, <code>1</code>: PendingApproval, <code>2</code>: Approved, <code>3</code>: Rejected.</td>
+            </tr>
+            <tr>
+              <td><code>SourceWarehouseId</code></td>
+              <td><code>Guid?</code></td>
+              <td>FK <code>Warehouses(Id)</code></td>
+              <td>Kho xuất hàng (dành cho phiếu xuất hoặc chuyển).</td>
+            </tr>
+            <tr>
+              <td><code>TargetWarehouseId</code></td>
+              <td><code>Guid?</code></td>
+              <td>FK <code>Warehouses(Id)</code></td>
+              <td>Kho nhập hàng (dành cho phiếu nhập hoặc chuyển).</td>
+            </tr>
+            <tr>
+              <td><code>ApprovedByUserId</code></td>
+              <td><code>Guid?</code></td>
+              <td>FK <code>Users(Id)</code></td>
+              <td>Kế toán thực hiện duyệt.</td>
+            </tr>
+            <tr>
+              <td><code>ApprovedAt</code></td>
+              <td><code>timestamp (UTC)?</code></td>
+              <td>Nullable</td>
+              <td>Thời điểm duyệt phiếu.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ApprovalTokens -->
+      <h3 id="tbl-tokens">3. Bảng <code>ApprovalTokens</code> (Trọng tâm Quy tắc 3)</h3>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Cột</th>
+              <th>Kiểu dữ liệu</th>
+              <th>Ràng buộc</th>
+              <th>Ý nghĩa</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>Id</code></td>
+              <td><code>Guid</code></td>
+              <td>PK</td>
+              <td>Khóa chính token.</td>
+            </tr>
+            <tr>
+              <td><code>VoucherId</code></td>
+              <td><code>Guid</code></td>
+              <td>NOT NULL, FK <code>Vouchers(Id)</code></td>
+              <td>Phiếu cần được duyệt.</td>
+            </tr>
+            <tr>
+              <td><code>TokenHash</code></td>
+              <td><code>varchar(64)</code></td>
+              <td>NOT NULL, UNIQUE INDEX</td>
+              <td>Băm SHA-256 của token bí mật gửi cho Kế toán.</td>
+            </tr>
+            <tr>
+              <td><code>ExpiresAt</code></td>
+              <td><code>timestamp (UTC)</code></td>
+              <td>NOT NULL</td>
+              <td>Thời điểm hết hạn hiệu lực (mặc định $CreatedAt + 24h$).</td>
+            </tr>
+            <tr>
+              <td><code>UsedAt</code></td>
+              <td><code>timestamp (UTC)?</code></td>
+              <td>Nullable</td>
+              <td>Thời điểm token đã được Kế toán bấm Duyệt/Từ chối. <strong>Khóa Quy tắc 3: nếu != null thì từ chối.</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- StockTransactionHistory -->
+      <h3 id="tbl-history">4. Bảng <code>StockTransactionHistory</code> (Sổ cái biến động kho bất biến)</h3>
+      <p>Bảng hoạt động theo nguyên lý <strong>Append-Only</strong>. Nghiêm cấm mọi lệnh UPDATE hoặc DELETE (được bảo vệ bằng Application Rule và EF Core Interceptor).</p>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Cột</th>
+              <th>Kiểu dữ liệu</th>
+              <th>Ràng buộc</th>
+              <th>Ý nghĩa</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>Id</code></td>
+              <td><code>Guid</code></td>
+              <td>PK</td>
+              <td>Định danh bản ghi biến động.</td>
+            </tr>
+            <tr>
+              <td><code>VoucherId</code></td>
+              <td><code>Guid</code></td>
+              <td>FK <code>Vouchers(Id)</code></td>
+              <td>Căn cứ chứng từ phê duyệt.</td>
+            </tr>
+            <tr>
+              <td><code>WarehouseId</code></td>
+              <td><code>Guid</code></td>
+              <td>FK <code>Warehouses(Id)</code></td>
+              <td>Kho có lượng hàng thay đổi.</td>
+            </tr>
+            <tr>
+              <td><code>ProductId</code></td>
+              <td><code>Guid</code></td>
+              <td>FK <code>Products(Id)</code></td>
+              <td>Mặt hàng biến động.</td>
+            </tr>
+            <tr>
+              <td><code>ChangeQuantity</code></td>
+              <td><code>decimal(18,3)</code></td>
+              <td>NOT NULL</td>
+              <td>Số lượng biến động (+ đối với nhập, - đối với xuất).</td>
+            </tr>
+            <tr>
+              <td><code>BalanceAfter</code></td>
+              <td><code>decimal(18,3)</code></td>
+              <td>NOT NULL, <code>&gt;= 0</code></td>
+              <td>Số lượng tồn sau khi thực hiện giao dịch.</td>
+            </tr>
+            <tr>
+              <td><code>OccurredAt</code></td>
+              <td><code>timestamp (UTC)</code></td>
+              <td>NOT NULL</td>
+              <td>Thời điểm giao dịch được ghi nhận.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="chien-luoc-index">Chiến lược Indexing tối ưu hiệu năng</h2>
+      <ul>
+        <li><code>CREATE UNIQUE INDEX IX_Vouchers_Code ON Vouchers (Code);</code>: Tra cứu phiếu theo mã tức thì.</li>
+        <li><code>CREATE INDEX IX_Vouchers_Status_Warehouse ON Vouchers (Status, SourceWarehouseId, TargetWarehouseId);</code>: Tối ưu bộ lọc danh sách phiếu.</li>
+        <li><code>CREATE UNIQUE INDEX IX_ApprovalTokens_Hash ON ApprovalTokens (TokenHash);</code>: Tra cứu token duyệt cực nhanh trong $O(1)$.</li>
+        <li><code>CREATE INDEX IX_StockHistory_Product_Warehouse ON StockTransactionHistory (ProductId, WarehouseId, OccurredAt DESC);</code>: Truy vấn sao kê biến động kho cho Kế toán và Thủ kho.</li>
+      </ul>
+    </div>
+  </main>
+</div>
+<script src="muc-luc.js"></script>
+<script src="_chung/khung.js"></script>
+</body>
+</html>

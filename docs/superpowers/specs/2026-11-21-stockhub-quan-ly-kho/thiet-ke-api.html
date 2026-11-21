@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>6. Thiết kế API & Auth · StockHub — Quản lý kho hàng</title>
+<link rel="stylesheet" href="_chung/style.css">
+</head>
+<body>
+<div class="khung">
+  <aside class="ben" data-khung-ben>
+    <a class="ben__ten" href="index.html">← Mục lục</a>
+  </aside>
+  <main class="noi-dung" data-khung-noi-dung>
+    <div class="trong">
+      <header class="dau-trang">
+        <div class="dau-trang__nhan">Spec · Thiết kế</div>
+        <h1>6. Thiết kế API RESTful & Cơ chế Xác thực</h1>
+        <p class="dau-trang__phu">Đặc tả chuẩn danh mục Endpoints /api/v1, Swagger UI tích hợp Bearer + Refresh Token và chuẩn hóa mã lỗi RFC 9457.</p>
+      </header>
+
+      <div class="the">
+        <strong>Chuẩn API:</strong> Định tuyến RESTful danh từ số nhiều, phiên bản hóa <code>/api/v1</code>, mọi phản hồi lỗi tuân thủ nghiêm ngặt <strong>RFC 9457 ProblemDetails</strong>, tài liệu hóa tương tác trực tiếp qua Swagger UI.
+      </div>
+
+      <h2 id="co-che-auth">Cơ chế xác thực: JWT Bearer & Refresh Token</h2>
+      <p>Hệ thống sử dụng cơ chế xác thực kép:</p>
+      <ul>
+        <li><strong>Access Token:</strong> JWT chứa <code>sub</code> (UserId), <code>email</code>, <code>roles</code>, ký bằng thuật toán HMAC-SHA256, thời hạn sống ngắn (15 phút).</li>
+        <li><strong>Refresh Token:</strong> Chuỗi bảo mật ngẫu nhiên lưu tại bảng <code>RefreshTokens</code> (thời hạn 7 ngày). Khi Access Token hết hạn (nhận mã 401), Client tự động gọi endpoint <code>/api/v1/auth/refresh</code> để lấy cặp token mới mà không bắt người dùng đăng nhập lại.</li>
+        <li><strong>Cấu hình Swagger UI:</strong> Thêm nút <strong>Authorize</strong> hỗ trợ nhập token Bearer (<code>Bearer {token}</code>) để giảng viên kiểm thử API trực tiếp trên trình duyệt.</li>
+      </ul>
+
+      <h2 id="danh-muc-endpoints">Danh mục Endpoints chi tiết</h2>
+
+      <!-- Auth Endpoints -->
+      <h3 id="ep-auth">1. Module Xác thực (/api/v1/auth)</h3>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Phương thức</th>
+              <th>Đường dẫn</th>
+              <th>Quyền hạn</th>
+              <th>Mô tả</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/v1/auth/login</code></td>
+              <td>Public</td>
+              <td>Đăng nhập bằng Email & Mật khẩu. Trả về AccessToken, RefreshToken và Role.</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/v1/auth/refresh</code></td>
+              <td>Public</td>
+              <td>Làm mới token bằng RefreshToken hợp lệ. Áp dụng cơ chế quay vòng token (Rotation).</td>
+            </tr>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/api/v1/auth/me</code></td>
+              <td>Authorize</td>
+              <td>Lấy thông tin tài khoản đang đăng nhập hiện tại và quyền hạn.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Warehouse Endpoints -->
+      <h3 id="ep-warehouses">2. Module Quản lý Kho (/api/v1/warehouses)</h3>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Phương thức</th>
+              <th>Đường dẫn</th>
+              <th>Quyền hạn</th>
+              <th>Mô tả</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/api/v1/warehouses</code></td>
+              <td>Tất cả vai trò</td>
+              <td>Lấy danh sách các kho hàng đang hoạt động (kèm tìm kiếm, phân trang).</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/v1/warehouses</code></td>
+              <td>Admin</td>
+              <td>Tạo mới một kho hàng (Mã kho, Tên kho, Địa chỉ).</td>
+            </tr>
+            <tr>
+              <td><code>PUT</code></td>
+              <td><code>/api/v1/warehouses/{id}</code></td>
+              <td>Admin</td>
+              <td>Cập nhật thông tin kho hàng.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Inventory Endpoints -->
+      <h3 id="ep-inventories">3. Module Tra cứu Tồn kho (/api/v1/inventories)</h3>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Phương thức</th>
+              <th>Đường dẫn</th>
+              <th>Quyền hạn</th>
+              <th>Mô tả</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/api/v1/inventories</code></td>
+              <td>Tất cả vai trò</td>
+              <td>Tra cứu tồn kho theo từng kho hoặc sản phẩm: <code>QuantityOnHand</code>, <code>QuantityReserved</code>, <code>Available</code>.</td>
+            </tr>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/api/v1/inventories/history</code></td>
+              <td>Tất cả vai trò</td>
+              <td>Tra cứu sổ nhật ký biến động tồn kho (Append-Only Audit Trail) theo SKU/Kho.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Voucher Endpoints -->
+      <h3 id="ep-vouchers">4. Module Chứng từ kho (/api/v1/vouchers)</h3>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Phương thức</th>
+              <th>Đường dẫn</th>
+              <th>Quyền hạn</th>
+              <th>Mô tả</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/api/v1/vouchers</code></td>
+              <td>Tất cả vai trò</td>
+              <td>Lấy danh sách phiếu nhập/xuất/chuyển kèm bộ lọc trạng thái (Draft, PendingApproval, Approved, Rejected).</td>
+            </tr>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/api/v1/vouchers/{id}</code></td>
+              <td>Tất cả vai trò</td>
+              <td>Xem chi tiết phiếu và danh sách dòng sản phẩm kèm đơn giá.</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/v1/vouchers</code></td>
+              <td>WarehouseStaff, Admin</td>
+              <td>Tạo phiếu mới ở trạng thái <code>Draft</code> (Kiểm tra tồn kho sơ bộ nếu là phiếu xuất).</td>
+            </tr>
+            <tr>
+              <td><code>PUT</code></td>
+              <td><code>/api/v1/vouchers/{id}</code></td>
+              <td>WarehouseStaff, Admin</td>
+              <td>Cập nhật phiếu nháp. <strong>Chặn lỗi 400 nếu Status != Draft (Quy tắc 2).</strong></td>
+            </tr>
+            <tr>
+              <td><code>DELETE</code></td>
+              <td><code>/api/v1/vouchers/{id}</code></td>
+              <td>WarehouseStaff, Admin</td>
+              <td>Xóa phiếu nháp. <strong>Chặn lỗi 400 nếu Status != Draft (Quy tắc 2).</strong></td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/v1/vouchers/{id}/create-approval-link</code></td>
+              <td>WarehouseStaff, Admin</td>
+              <td>Chuyển phiếu sang <code>PendingApproval</code>, sinh token 1 lần và trả về URL duyệt (Quy tắc 3).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Approval Endpoints -->
+      <h3 id="ep-approvals">5. Module Phê duyệt Một lần (/api/v1/approvals)</h3>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Phương thức</th>
+              <th>Đường dẫn</th>
+              <th>Quyền hạn</th>
+              <th>Mô tả</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/api/v1/approvals/verify?token={token}</code></td>
+              <td>Public (Dựa vào Token)</td>
+              <td>Xác thực token và lấy thông tin chi tiết phiếu cho Kế toán xem trước khi bấm Duyệt. Báo lỗi nếu token đã dùng hoặc hết hạn.</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/v1/approvals/settle</code></td>
+              <td>Public (Dựa vào Token)</td>
+              <td>Thực thi Duyệt (<code>Approve</code>) hoặc Từ chối (<code>Reject</code>). Đánh dấu <code>UsedAt</code> và vô hiệu hóa token ngay lập tức (Quy tắc 3).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="request-response-samples">Mẫu DTO Request / Response</h2>
+
+      <h3>1. Yêu cầu tạo liên kết duyệt (Create Approval Link)</h3>
+      <pre><code>// POST /api/v1/vouchers/3fa85f64-5717-4562-b3fc-2c963f66afa6/create-approval-link
+// Response (200 OK):
+{
+  "voucherId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "voucherCode": "PX-20261121-0005",
+  "approvalUrl": "http://localhost:5173/approvals/a9f1b2c3d4e5f6...64chars",
+  "expiresAt": "2026-11-22T09:30:00Z",
+  "message": "Liên kết duyệt 1 lần đã được tạo thành công. Vui lòng gửi cho Kế toán thẩm định."
+}</code></pre>
+
+      <h3>2. Kế toán thực thi Duyệt phiếu (Settle Voucher)</h3>
+      <pre><code>// POST /api/v1/approvals/settle
+// Request Body:
+{
+  "token": "a9f1b2c3d4e5f6...64chars",
+  "action": "Approve", // Hoặc "Reject"
+  "notes": "Đã đối chiếu bảng kê công nợ hợp lệ, đồng ý xuất hàng."
+}
+
+// Response (200 OK):
+{
+  "success": true,
+  "voucherId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "status": "Approved",
+  "settledAt": "2026-11-21T09:35:12Z",
+  "message": "Phiếu xuất kho đã được duyệt thành công. Tồn kho đã được cập nhật chính thức."
+}</code></pre>
+
+      <h2 id="ma-loi-rfc-9457">Đặc tả mã lỗi chuẩn RFC 9457 ProblemDetails</h2>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Mã HTTP</th>
+              <th>Error Code nghiệp vụ</th>
+              <th>Quy tắc liên quan</th>
+              <th>Mô tả chi tiết trả về client</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>400 Bad Request</code></td>
+              <td><code>INSUFFICIENT_STOCK</code></td>
+              <td><strong>Quy tắc 1</strong></td>
+              <td>Tồn kho không đủ để xuất. Trả kèm chi tiết: <code>productId</code>, <code>requested</code>, <code>available</code>.</td>
+            </tr>
+            <tr>
+              <td><code>409 Conflict</code></td>
+              <td><code>CONCURRENCY_CONFLICT</code></td>
+              <td><strong>Quy tắc 1</strong></td>
+              <td>Dữ liệu tồn kho vừa được cập nhật bởi một phiên làm việc khác. Client vui lòng tải lại và thử lại.</td>
+            </tr>
+            <tr>
+              <td><code>400 Bad Request</code></td>
+              <td><code>VOUCHER_IMMUTABLE</code></td>
+              <td><strong>Quy tắc 2</strong></td>
+              <td>Phiếu đã ở trạng thái Approved hoặc Rejected, cấm mọi thao tác sửa hoặc xóa.</td>
+            </tr>
+            <tr>
+              <td><code>410 Gone</code></td>
+              <td><code>TOKEN_ALREADY_USED</code></td>
+              <td><strong>Quy tắc 3</strong></td>
+              <td>Liên kết duyệt này chỉ được sử dụng một lần và đã được Kế toán xác nhận vào lúc [UsedAt].</td>
+            </tr>
+            <tr>
+              <td><code>400 Bad Request</code></td>
+              <td><code>TOKEN_EXPIRED</code></td>
+              <td><strong>Quy tắc 3</strong></td>
+              <td>Liên kết duyệt đã hết hạn hiệu lực sau 24 giờ. Vui lòng yêu cầu thủ kho sinh liên kết mới.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <pre><code>// Ví dụ định dạng lỗi RFC 9457 khi vi phạm Quy tắc 3 (Tái sử dụng link):
+{
+  "type": "https://stockhub.local/errors/token-already-used",
+  "title": "Liên kết duyệt đã hết hiệu lực",
+  "status": 410,
+  "detail": "Liên kết duyệt này chỉ được sử dụng đúng 1 lần và đã được sử dụng vào lúc 2026-11-21T09:35:12Z.",
+  "instance": "/api/v1/approvals/settle",
+  "code": "TOKEN_ALREADY_USED",
+  "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00"
+}</code></pre>
+    </div>
+  </main>
+</div>
+<script src="muc-luc.js"></script>
+<script src="_chung/khung.js"></script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>ADR-0001: Khóa kho & Token 1 lần · StockHub — Quản lý kho hàng</title>
+<link rel="stylesheet" href="_chung/style.css">
+</head>
+<body>
+<div class="khung">
+  <aside class="ben" data-khung-ben>
+    <a class="ben__ten" href="index.html">← Mục lục</a>
+  </aside>
+  <main class="noi-dung" data-khung-noi-dung>
+    <div class="trong">
+      <header class="dau-trang">
+        <div class="dau-trang__nhan">ADR-0001 · Quyết định Kiến trúc</div>
+        <h1>ADR-0001: Chiến lược Chống âm kho Đồng thời & Cơ chế Token Duyệt 1 lần</h1>
+        <p class="dau-trang__phu">Ghi nhận các quyết định kiến trúc cốt lõi để bảo vệ tuyệt đối 3 quy tắc bất biến của hệ thống StockHub.</p>
+        <div class="dau-trang__meta">
+          <span><strong>Trạng thái:</strong> <span class="muc muc--de-xuat">Đã chấp thuận (Accepted)</span></span>
+          <span><strong>Ngày quyết định:</strong> 21/11/2026</span>
+          <span><strong>Người quyết định:</strong> Tác giả đồ án & AI Agent</span>
+        </div>
+      </header>
+
+      <div class="the">
+        <strong>Tóm tắt quyết định:</strong> Áp dụng <strong>Optimistic Concurrency Control (OCC)</strong> với Concurrency Token cho bảng <code>Inventories</code> để chống âm kho (Quy tắc 1); Áp dụng <strong>Mã băm SHA-256 kèm trường UsedAt</strong> trong giao dịch nguyên tử DB cho bảng <code>ApprovalTokens</code> để đảm bảo liên kết chỉ duyệt 1 lần (Quy tắc 3).
+      </div>
+
+      <h2 id="boi-canh">1. Bối cảnh bài toán</h2>
+      <p>Hệ thống StockHub quản lý hoạt động nhập, xuất và chuyển kho của doanh nghiệp nhiều chi nhánh. Đề tài đặt ra 3 yêu cầu nghiệp vụ bắt buộc:</p>
+      <ul>
+        <li><strong>Quy tắc 1:</strong> Tồn kho không bao giờ được âm, kể cả khi có nhiều nhân viên hoặc khách hàng đặt hàng xuất cùng một lúc.</li>
+        <li><strong>Quy tắc 2:</strong> Phiếu đã Kế toán duyệt hoặc từ chối tuyệt đối không được sửa đổi hay xóa.</li>
+        <li><strong>Quy tắc 3:</strong> Liên kết duyệt phiếu gửi cho Kế toán chỉ được sử dụng đúng một lần, ngăn chặn rủi ro phê duyệt lặp lại gây sai lệch sổ sách tồn kho.</li>
+      </ul>
+      <p>Hệ thống phải triển khai gọn nhẹ, chạy trọn bộ bằng Docker Compose và dễ dàng kiểm thử tự động với tỷ lệ Code Coverage $\ge 80\%$.</p>
+
+      <h2 id="quyet-dinh">2. Quyết định kiến trúc (Decisions)</h2>
+
+      <h3>Quyết định 1: Kiểm soát tranh chấp ghi bằng Khóa lạc quan (Optimistic Concurrency)</h3>
+      <p>Hệ thống cấu hình cột <code>RowVersion</code> trên thực thể <code>Inventory</code>. Khi thực hiện trừ kho:</p>
+      <ol>
+        <li>Tầng Domain kiểm tra logic: <code>AvailableQuantity &gt;= ExportQuantity</code>.</li>
+        <li>EF Core sinh lệnh UPDATE kèm mệnh đề so khớp Concurrency Token: <code>WHERE WarehouseId = @w AND ProductId = @p AND RowVersion = @original</code>.</li>
+        <li>Nếu xảy ra xung đột đồng thời, EF Core ném <code>DbUpdateConcurrencyException</code>. Application Pipeline bắt ngoại lệ và trả về RFC 9457 ProblemDetails mã <code>409 Conflict</code> (hoặc thử lại 1 lần nếu tồn kho còn đủ).</li>
+        <li>Bổ sung ràng buộc cơ sở dữ liệu: <code>CHECK (QuantityOnHand &gt;= 0)</code> như một bức tường phòng vệ cuối cùng.</li>
+      </ol>
+
+      <h3>Quyết định 2: Quản lý liên kết duyệt 1 lần bằng thực thể ApprovalToken</h3>
+      <p>Khi nhân viên tạo liên kết duyệt:</p>
+      <ol>
+        <li>Sinh chuỗi ngẫu nhiên bảo mật 64 ký tự URL-safe bằng <code>RandomNumberGenerator</code>.</li>
+        <li>Băm token bằng thuật toán <code>SHA-256</code> và lưu vào bảng <code>ApprovalTokens</code> (gồm <code>TokenHash</code>, <code>VoucherId</code>, <code>ExpiresAt = Now + 24h</code>, <code>UsedAt = null</code>).</li>
+        <li>Trả về URL duyệt cho giao diện để hiển thị nút sao chép (Chế độ Demo/API trực tiếp).</li>
+        <li>Khi Kế toán duyệt: Mở một Database Transaction, thực thi đồng thời:
+          <ul>
+            <li>Cập nhật trạng thái phiếu <code>Voucher.Status = Approved</code>.</li>
+            <li>Cập nhật số lượng tồn kho <code>Inventory</code> và ghi nhật ký <code>StockTransactionHistory</code>.</li>
+            <li>Cập nhật <code>ApprovalToken.UsedAt = DateTime.UtcNow</code>.</li>
+          </ul>
+        </li>
+        <li>Bất kỳ yêu cầu nào gửi lại với token đã có <code>UsedAt != null</code> sẽ bị từ chối ngay với mã lỗi <code>410 Gone</code>.</li>
+      </ol>
+
+      <h2 id="he-qua">3. Hệ quả (Consequences)</h2>
+      <div class="diem-danh-sach">
+        <div class="diem">
+          <div class="diem__ten">Ưu điểm (Tác động tích cực)</div>
+          <div class="diem__mo">
+            <ul>
+              <li>Bảo vệ toàn vẹn tuyệt đối 3 quy tắc bất biến.</li>
+              <li>Không giữ khóa cơ sở dữ liệu lâu, loại bỏ nguy cơ Deadlock khi xuất kho đa mặt hàng.</li>
+              <li>Không phụ thuộc dịch vụ ngoài (Redis, SMTP), đảm bảo chạy mượt mà trong Docker Compose.</li>
+              <li>Dễ dàng viết bài kiểm thử Unit Test và Integration Test kiểm chứng (đạt tiêu chí coverage $\ge 80\%$).</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="diem">
+          <div class="diem__ten">Đánh đổi (Hạn chế & Giải pháp)</div>
+          <div class="diem__mo">
+            <ul>
+              <li>Cần quản lý thêm bảng <code>ApprovalTokens</code> và dọn dẹp các token cũ hết hạn định kỳ.</li>
+              <li>Khi có tải xuất kho tranh chấp cực cao, một số request sẽ nhận lỗi 409 và cần người dùng bấm thử lại. (Phù hợp và chấp nhận được với quy mô doanh nghiệp và bài tập lớn).</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <h2 id="phuong-an-da-loai">4. Các phương án đã loại bỏ</h2>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Phương án bị loại</th>
+              <th>Lý do loại bỏ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Kiểm tra in-memory C# không khóa</strong></td>
+              <td>Race condition chắc chắn gây âm kho (vi phạm Quy tắc 1).</td>
+            </tr>
+            <tr>
+              <td><strong>Pessimistic Locking (SELECT FOR UPDATE)</strong></td>
+              <td>Dễ gây nghẽn kết nối và deadlock; phụ thuộc sâu vào cú pháp SQL riêng của từng hệ quản trị DB.</td>
+            </tr>
+            <tr>
+              <td><strong>JWT Token kết hợp Redis Blacklist</strong></td>
+              <td>Tăng độ phức tạp không cần thiết, phải cấu hình thêm Redis container làm tăng tải Docker.</td>
+            </tr>
+            <tr>
+              <td><strong>Gửi link qua Gmail SMTP</strong></td>
+              <td>Thường xuyên lỗi mạng, bị Google chặn IP trong Docker; làm chậm quá trình chấm bài và demo.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="muc-luc.js"></script>
+<script src="_chung/khung.js"></script>
+</body>
+</html>

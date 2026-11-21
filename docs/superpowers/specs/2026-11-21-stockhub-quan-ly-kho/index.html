@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>1. Tổng quan · StockHub — Quản lý kho hàng</title>
+<link rel="stylesheet" href="_chung/style.css">
+</head>
+<body>
+<div class="khung">
+  <aside class="ben" data-khung-ben>
+    <a class="ben__ten" href="index.html">← Mục lục</a>
+  </aside>
+  <main class="noi-dung" data-khung-noi-dung>
+    <div class="trong">
+      <header class="dau-trang">
+        <div class="dau-trang__nhan">Spec · StockHub ĐT07</div>
+        <h1>1. Tổng quan dự án StockHub</h1>
+        <p class="dau-trang__phu">Hệ thống quản lý nhập, xuất và luân chuyển hàng hóa đa kho cho doanh nghiệp với cơ chế phê duyệt tài chính một lần.</p>
+        <div class="dau-trang__meta">
+          <span><strong>Ngày cập nhật:</strong> 21/11/2026</span>
+          <span><strong>Hệ thống:</strong> ĐT07: StockHub (.NET 10 Web API + React 19 SPA)</span>
+          <span><strong>Trạng thái:</strong> <span class="muc muc--de-xuat">Chỉ có spec, chưa sửa code</span></span>
+          <span><strong>Lịch sử quyết định:</strong> 21/11/2026 (Chốt 3 vai trò, duyệt link demo trực tiếp, Docker + CI + Code Coverage)</span>
+        </div>
+      </header>
+
+      <div class="the the--canh-bao">
+        <strong>Kết luận nhanh:</strong>
+        <p style="margin-top: 8px; margin-bottom: 4px;">Dự án giải quyết bài toán quản trị kho nhiều chi nhánh, kiểm soát chặt chẽ giá trị tồn kho và bất biến chứng từ. Trọng tâm cốt lõi là bảo vệ nghiêm ngặt <strong>3 quy tắc bất biến</strong>: (1) Tồn kho không bao giờ âm; (2) Phiếu đã duyệt cấm chỉnh sửa/xóa; (3) Liên kết duyệt phiếu gửi Kế toán chỉ được sử dụng đúng 1 lần.</p>
+        <p style="margin-bottom: 0;"><strong>Hướng giải pháp:</strong> Backend .NET 10 Clean Architecture + CQRS (MediatR) + EF Core 10 (PostgreSQL/SQL Server) + Optimistic Concurrency Token; Frontend React (TypeScript + Vite + Tailwind CSS); Hỗ trợ Swagger JWT Bearer + Refresh Token; Đóng gói Docker Compose và kiểm thử tự động với GitHub Actions CI.</p>
+      </div>
+
+      <h2 id="boi-canh">Bối cảnh & Mục tiêu nghiệp vụ</h2>
+      <p>Doanh nghiệp phân phối hàng hóa vận hành nhiều kho (Kho Tổng, Kho Miền Bắc, Kho Miền Nam). Việc quản lý chứng từ nhập xuất gặp rủi ro lớn khi xuất quá số lượng thực tế gây âm kho, chỉnh sửa chứng từ sau lưng kế toán, hoặc rò rỉ đường link phê duyệt dẫn đến duyệt lặp lại nhiều lần.</p>
+      <p>StockHub được xây dựng nhằm đáp ứng mục tiêu:</p>
+      <ul>
+        <li><strong>Kiểm soát số lượng tồn kho chính xác theo từng kho:</strong> Quản lý số lượng tồn thực tế (On-hand) và phân bổ (Reserved), cấm mọi giao dịch dẫn đến âm kho.</li>
+        <li><strong>Bảo đảm tính toàn vẹn chứng từ:</strong> Chứng từ nhập/xuất/chuyển kho sau khi Kế toán duyệt trở thành nguồn sự thật bất biến (Immutable), mọi điều chỉnh phải thông qua chứng từ bù.</li>
+        <li><strong>Quy trình phê duyệt an toàn, tinh gọn:</strong> Nhân viên kho tạo phiếu và cấp phát liên kết duyệt một lần cho Kế toán, Kế toán thao tác phê duyệt nhanh chóng qua web mà không cần đăng nhập rườm rà nhưng vẫn đảm bảo tính bảo mật và duy nhất.</li>
+      </ul>
+
+      <h2 id="ba-quy-tac">3 Quy tắc bất biến bắt buộc</h2>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Quy tắc</th>
+              <th>Ý nghĩa nghiệp vụ</th>
+              <th>Giải pháp kỹ thuật cốt lõi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. Tồn kho không được âm</strong></td>
+              <td>Không cho phép xuất hoặc điều chuyển số lượng lớn hơn số lượng hàng hiện có tại kho chỉ định.</td>
+              <td>Kiểm tra điều kiện ở Domain Model, khóa lạc quan (<code>RowVersion</code>/Concurrency Token) trong EF Core 10, bọc DB Transaction đảm bảo chống Race Condition.</td>
+            </tr>
+            <tr>
+              <td><strong>2. Phiếu đã duyệt không được sửa</strong></td>
+              <td>Phiếu đã được Kế toán duyệt hoặc từ chối là dữ liệu lịch sử tài chính, không ai được quyền sửa đổi hay xóa.</td>
+              <td>Quy tắc chuyển trạng thái State Machine: chỉ trạng thái <code>Draft</code> mới được chỉnh sửa. Chặn ở Application Handler, Domain Validation và Interceptor EF Core.</td>
+            </tr>
+            <tr>
+              <td><strong>3. Link duyệt gửi kế toán chỉ dùng 1 lần</strong></td>
+              <td>Đường link chứa token phê duyệt gửi cho Kế toán sau khi đã bấm Duyệt hoặc Từ chối sẽ bị vô hiệu hóa vĩnh viễn.</td>
+              <td>Lưu bảng <code>ApprovalTokens</code> với mã băm an toàn (SHA-256), ghi nhận <code>UsedAt</code> và cập nhật trạng thái phiếu trong 1 Transaction duy nhất. Kiểm tra <code>UsedAt != null</code> sẽ trả về lỗi RFC 9457 (400/410).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="ngoai-pham-vi">Phạm vi & Ngoài phạm vi (Out of Scope)</h2>
+      <p>Nhằm đảm bảo chất lượng cao nhất cho bài tập lớn cá nhân và hoàn thành đúng hạn 100% tiêu chí chấm điểm, dự án phân định rõ ranh giới:</p>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Trong phạm vi (In-Scope)</th>
+              <th>Ngoài phạm vi (Out-of-Scope)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Quản lý 3 vai trò: <code>Admin</code>, <code>WarehouseStaff</code>, <code>Accountant</code>.</td>
+              <td>Quản lý hạn sử dụng (FEFO/FIFO date-tracking), số Lô (Batch/Lot), Serial Number chi tiết.</td>
+            </tr>
+            <tr>
+              <td>Quản lý danh mục Kho (đa kho), Sản phẩm, Phiếu nhập, Phiếu xuất, Điều chuyển.</td>
+              <td>Quản lý vị trí ô kệ chi tiết trong kho (Bin/Rack/Shelf location).</td>
+            </tr>
+            <tr>
+              <td>Tạo & sao chép liên kết duyệt 1 lần trực tiếp trên giao diện và API (Chế độ Demo nhanh).</td>
+              <td>Tích hợp máy chủ gửi thư ngoài qua SMTP/MailKit (tránh lỗi mạng container).</td>
+            </tr>
+            <tr>
+              <td>Lịch sử biến động tồn kho bất biến (<code>StockTransactionHistory</code>).</td>
+              <td>Tích hợp cổng thanh toán trực tuyến hoặc máy in hóa đơn điện tử.</td>
+            </tr>
+            <tr>
+              <td>Xác thực JWT + Refresh Token, Swagger UI có nút Authorize.</td>
+              <td>Đa tenant (Multi-tenant SaaS nhiều công ty).</td>
+            </tr>
+            <tr>
+              <td>Docker Compose trọn gói, Unit Test có Code Coverage, GitHub Actions CI.</td>
+              <td>Ứng dụng di động Native (chỉ tập trung Web React responsive).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="cau-truc-tai-lieu">Cấu trúc bộ tài liệu đặc tả</h2>
+      <p>Tài liệu gồm 12 trang chuyên đề và 1 trang quyết định kiến trúc (ADR) được tổ chức theo đúng quy chuẩn AGENTS.md:</p>
+      <ol class="buoc">
+        <li><strong>Tổng quan (index.html):</strong> Bối cảnh, mục tiêu, 3 quy tắc và ranh giới hệ thống.</li>
+        <li><strong>Hiện trạng (hien-trang.html):</strong> Khảo sát điểm xuất phát (Greenfield), cấu trúc hiện có của repo.</li>
+        <li><strong>Yêu cầu (yeu-cau.html):</strong> User stories, Gherkin Given/When/Then chi tiết cho từng vai trò và các ca kiểm thử quy tắc bất biến.</li>
+        <li><strong>Mô hình miền (mo-hinh-mien.html):</strong> Thiết kế Rich Domain Model, Entity, Aggregate, Value Object và sơ đồ trạng thái phiếu (State Diagram SVG).</li>
+        <li><strong>Các phương án (phuong-an.html):</strong> So sánh các giải pháp giải quyết race condition âm kho và token duyệt 1 lần.</li>
+        <li><strong>Thiết kế API (thiet-ke-api.html):</strong> Danh mục endpoint chuẩn RESTful /api/v1, cơ chế Auth Bearer + Refresh Token, chuẩn mã lỗi RFC 9457.</li>
+        <li><strong>Thiết kế dữ liệu (thiet-ke-du-lieu.html):</strong> Sơ đồ ERD SVG, schema 8 bảng, chiến lược Indexing và Concurrency Token.</li>
+        <li><strong>Mockup giao diện (mockup.html):</strong> Wireframe trực quan màn hình quản lý kho, tạo phiếu, cấp link duyệt và màn hình duyệt của Kế toán.</li>
+        <li><strong>Rủi ro & Migration (rui-ro-migration.html):</strong> Phân tích rủi ro đồng thời, rủi ro token và chiến lược migration database.</li>
+        <li><strong>Tiêu chí nghiệm thu (nghiem-thu.html):</strong> Bảng tiêu chí có mã số kiểm chứng được, kịch bản test 3 quy tắc bất biến.</li>
+        <li><strong>Quyết định đã chốt (cau-hoi.html):</strong> Ghi nhận các quyết định Q-01 đến Q-04 đã thống nhất với người dùng.</li>
+        <li><strong>Lộ trình phân rã (lo-trinh.html):</strong> Phân rã theo lát dọc (Vertical Slices) chuẩn bị cho quá trình cài đặt.</li>
+        <li><strong>ADR-0001 (adr-0001-...html):</strong> Ghi nhận quyết định kiến trúc khóa kho và token một lần.</li>
+      </ol>
+    </div>
+  </main>
+</div>
+<script src="muc-luc.js"></script>
+<script src="_chung/khung.js"></script>
+</body>
+</html>

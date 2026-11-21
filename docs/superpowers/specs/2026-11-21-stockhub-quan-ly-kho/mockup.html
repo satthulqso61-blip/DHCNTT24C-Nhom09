@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>8. Mockup giao diện · StockHub — Quản lý kho hàng</title>
+<link rel="stylesheet" href="_chung/style.css">
+<style>
+  .ui-btn { display: inline-flex; align-items: center; justify-content: center; padding: 6px 12px; font-size: 13px; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; text-decoration: none; }
+  .ui-btn--primary { background: #2563eb; color: #ffffff; }
+  .ui-btn--success { background: #16a34a; color: #ffffff; }
+  .ui-btn--danger { background: #dc2626; color: #ffffff; }
+  .ui-btn--warning { background: #d97706; color: #ffffff; }
+  .ui-btn--outline { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); }
+  .ui-badge { display: inline-block; padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 9999px; }
+  .ui-badge--draft { background: #e2e8f0; color: #475569; }
+  .ui-badge--pending { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+  .ui-badge--approved { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+  .ui-badge--rejected { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+  .ui-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-surface); color: var(--text-main); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="khung">
+  <aside class="ben" data-khung-ben>
+    <a class="ben__ten" href="index.html">← Mục lục</a>
+  </aside>
+  <main class="noi-dung" data-khung-noi-dung>
+    <div class="trong">
+      <header class="dau-trang">
+        <div class="dau-trang__nhan">Spec · Thiết kế UI/UX</div>
+        <h1>8. Mockup Giao diện Hệ thống</h1>
+        <p class="dau-trang__phu">Bản vẽ giao diện React + Tailwind CSS các màn hình trọng tâm phục vụ quy trình nhập xuất và phê duyệt một lần.</p>
+      </header>
+
+      <div class="the the--moi">
+        <strong>Trọng tâm Demo 5–10 phút:</strong> Mockup tập trung làm nổi bật luồng thao tác của 3 vai trò: Đăng nhập nhanh $\rightarrow$ Nhân viên tạo phiếu xuất $\rightarrow$ Bấm nút "Tạo & Sao chép link duyệt" $\rightarrow$ Kế toán mở link duyệt thành công $\rightarrow$ Mở lại link lần 2 nhận thông báo chặn lỗi.
+      </div>
+
+      <!-- Màn 1: Danh sách phiếu & Nút tạo link duyệt -->
+      <h2 id="ui-danh-sach-phieu">Màn hình 1: Danh sách chứng từ kho & Nút tạo link duyệt (WarehouseStaff)</h2>
+      <p>Nhân viên kho quản lý danh sách phiếu nhập xuất. Trên mỗi phiếu ở trạng thái <code>Draft</code> có nút bấm đặc biệt <strong>"Tạo & Sao chép liên kết duyệt"</strong>.</p>
+      
+      <div class="mau">
+        <div class="may">
+          <div class="may__thanh-tieu-de">
+            <span class="may__cham" style="background:#ef4444"></span>
+            <span class="may__cham" style="background:#f59e0b"></span>
+            <span class="may__cham" style="background:#10b981"></span>
+            <span style="margin-left: 12px;">StockHub Portal — Quản lý chứng từ kho [Thủ kho: NguyenVanA]</span>
+          </div>
+          <div class="may__than">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+              <div>
+                <h3 style="margin:0;">Chứng từ Xuất / Nhập / Chuyển kho</h3>
+                <span style="font-size:12px; color:var(--text-muted);">Hiển thị toàn bộ phiếu của Kho Tổng & Chi nhánh</span>
+              </div>
+              <button class="ui-btn ui-btn--primary">+ Lập phiếu xuất kho mới</button>
+            </div>
+
+            <div class="bang-boc">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Mã phiếu</th>
+                    <th>Loại</th>
+                    <th>Kho xuất</th>
+                    <th>Kho đích</th>
+                    <th>Trạng thái</th>
+                    <th>Tổng tiền</th>
+                    <th>Hành động</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>PX-20261121-0005</strong></td>
+                    <td>Xuất kho</td>
+                    <td>Kho Tổng (Hà Nội)</td>
+                    <td>Khách hàng VIP</td>
+                    <td><span class="ui-badge ui-badge--draft">Nháp (Draft)</span></td>
+                    <td>145.000.000 đ</td>
+                    <td style="white-space:nowrap;">
+                      <button class="ui-btn ui-btn--warning" style="padding:4px 8px; font-size:11px;">🔗 Tạo & Sao chép link duyệt</button>
+                      <button class="ui-btn ui-btn--outline" style="padding:4px 8px; font-size:11px; margin-left:4px;">Sửa</button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><strong>PX-20261121-0004</strong></td>
+                    <td>Xuất kho</td>
+                    <td>Kho Miền Nam</td>
+                    <td>Đại lý Cần Thơ</td>
+                    <td><span class="ui-badge ui-badge--pending">Chờ duyệt</span></td>
+                    <td>68.000.000 đ</td>
+                    <td>
+                      <span style="font-size:12px; color:var(--text-muted);">Đã gửi link cho Kế toán</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><strong>PN-20261120-0012</strong></td>
+                    <td>Nhập kho</td>
+                    <td>Nhà cung cấp Dell</td>
+                    <td>Kho Tổng (Hà Nội)</td>
+                    <td><span class="ui-badge ui-badge--approved">Đã duyệt</span></td>
+                    <td>420.000.000 đ</td>
+                    <td>
+                      <span style="font-size:11px; color:#16a34a; font-weight:bold;">Đã khóa · Bất biến</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Màn 2: Pop-up link duyệt -->
+      <h2 id="ui-popup-link">Màn hình 2: Pop-up Tạo liên kết duyệt 1 lần thành công (Modal)</h2>
+      <p>Khi bấm "Tạo liên kết duyệt", hệ thống hiển thị pop-up cung cấp liên kết duyệt trực tiếp cho người kiểm thử/Kế toán mà không cần cấu hình SMTP.</p>
+
+      <div class="mau">
+        <div class="may" style="max-width: 600px;">
+          <div class="may__thanh-tieu-de">
+            <span>Thông báo hệ thống — Cấp phát liên kết phê duyệt</span>
+          </div>
+          <div class="may__than" style="text-align:center;">
+            <div style="font-size: 40px; margin-bottom: 8px;">🔗</div>
+            <h3 style="margin: 0 0 8px 0; color: var(--primary);">Đã tạo liên kết phê duyệt 1 lần!</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+              Phiếu <strong>PX-20261121-0005</strong> đã chuyển sang trạng thái <strong>Chờ duyệt</strong>.<br>
+              Liên kết này có hiệu lực trong 24 giờ và sẽ bị vô hiệu hóa ngay sau khi Kế toán bấm Duyệt/Từ chối.
+            </p>
+
+            <div style="display:flex; gap:8px; margin-bottom: 16px;">
+              <input class="ui-input" type="text" readonly value="http://localhost:5173/approvals/a9f1b2c3d4e5f6...64chars" style="font-family:monospace; font-size:12px; background:var(--bg-app);">
+              <button class="ui-btn ui-btn--primary" style="white-space:nowrap;">📋 Sao chép</button>
+            </div>
+
+            <div style="display:flex; justify-content:center; gap:12px;">
+              <a href="#ui-ke-toan-duyet" class="ui-btn ui-btn--outline" style="font-size:12px;">Mở thử tab Kế toán (Demo)</a>
+              <button class="ui-btn ui-btn--outline" style="font-size:12px;">Đóng</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Màn 3: Kế toán duyệt 1 lần -->
+      <h2 id="ui-ke-toan-duyet">Màn hình 3: Kế toán thẩm định & Duyệt phiếu 1 lần (Accountant Portal)</h2>
+      <p>Kế toán truy cập đường dẫn nhận được. Màn hình hiển thị đầy đủ bảng kê mặt hàng, số lượng tồn thực tế và tổng tiền.</p>
+
+      <div class="mau">
+        <div class="may">
+          <div class="may__thanh-tieu-de">
+            <span class="may__cham" style="background:#ef4444"></span>
+            <span class="may__cham" style="background:#f59e0b"></span>
+            <span class="may__cham" style="background:#10b981"></span>
+            <span style="margin-left: 12px;">Cổng phê duyệt chứng từ kế toán StockHub (Token bảo mật 1 lần)</span>
+          </div>
+          <div class="may__than">
+            <div style="background:var(--primary-light); border:1px solid var(--primary-border); padding:12px 16px; border-radius:8px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <strong style="color:var(--primary);">Phiếu xuất kho: PX-20261121-0005</strong><br>
+                <span style="font-size:12px; color:var(--text-muted);">Người lập: Thủ kho TranVanB | Kho xuất: Kho Tổng (Hà Nội)</span>
+              </div>
+              <span class="ui-badge ui-badge--pending">Chờ phê duyệt</span>
+            </div>
+
+            <h4 style="margin: 12px 0 8px 0;">Bảng kê chi tiết mặt hàng đề xuất xuất kho:</h4>
+            <div class="bang-boc">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Mã SKU</th>
+                    <th>Tên sản phẩm</th>
+                    <th>ĐVT</th>
+                    <th>Số lượng xuất</th>
+                    <th>Tồn kho hiện có</th>
+                    <th>Đơn giá</th>
+                    <th>Thành tiền</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>LAP-DELL-5520</code></td>
+                    <td>Laptop Dell Latitude 5520 i7</td>
+                    <td>Chiếc</td>
+                    <td><strong>5</strong></td>
+                    <td><span style="color:#16a34a; font-weight:bold;">12 (Đủ tồn)</span></td>
+                    <td>25.000.000 đ</td>
+                    <td>125.000.000 đ</td>
+                  </tr>
+                  <tr>
+                    <td><code>MNTR-DELL-24</code></td>
+                    <td>Màn hình Dell Ultrasharp 24 inch</td>
+                    <td>Chiếc</td>
+                    <td><strong>4</strong></td>
+                    <td><span style="color:#16a34a; font-weight:bold;">15 (Đủ tồn)</span></td>
+                    <td>5.000.000 đ</td>
+                    <td>20.000.000 đ</td>
+                  </tr>
+                  <tr style="background:var(--bg-app); font-weight:bold;">
+                    <td colspan="6" style="text-align:right;">TỔNG CỘNG GIÁ TRỊ:</td>
+                    <td style="color:#2563eb; font-size:15px;">145.000.000 đ</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style="margin: 20px 0; display:flex; justify-content:flex-end; gap:12px;">
+              <button class="ui-btn ui-btn--danger" style="padding:10px 20px;">✕ Từ chối phiếu</button>
+              <button class="ui-btn ui-btn--success" style="padding:10px 24px;">✓ Xác nhận Phê duyệt phiếu</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Màn 4: Tái sử dụng link bị chặn -->
+      <h2 id="ui-chan-link-lan-2">Màn hình 4: Thử truy cập lại link đã duyệt lần thứ 2 (Bảo vệ Quy tắc 3)</h2>
+      <p>Sau khi Kế toán đã bấm duyệt, nếu người dùng tải lại trang hoặc ai đó click vào link cũ, hệ thống khóa truy cập và hiển thị màn hình cảnh báo RFC 9457 (410 Gone).</p>
+
+      <div class="mau">
+        <div class="may" style="max-width: 650px;">
+          <div class="may__thanh-tieu-de">
+            <span>Cảnh báo bảo mật hệ thống — 410 Gone</span>
+          </div>
+          <div class="may__than" style="text-align:center; padding:32px 20px;">
+            <div style="font-size: 48px; margin-bottom: 12px;">🚫</div>
+            <h3 style="color: #dc2626; margin: 0 0 10px 0;">LIÊN KẾT PHÊ DUYỆT ĐÃ HẾT HIỆU LỰC!</h3>
+            <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 20px;">
+              Đường dẫn này được bảo vệ bởi <strong>Quy tắc bất biến số 3</strong> (Liên kết duyệt chỉ dùng đúng 1 lần).<br>
+              Phiếu <strong>PX-20261121-0005</strong> đã được thực thi phê duyệt vào lúc:<br>
+              <code style="font-size: 13px; font-weight: bold; color: #166534; background: #dcfce7; padding: 4px 8px;">2026-11-21 09:35:12 (UTC)</code><br>
+              Mọi yêu cầu gửi lại từ liên kết này đều bị từ chối tuyệt đối.
+            </p>
+            <div class="the the--canh-bao" style="text-align:left; font-size:12px; margin: 0 auto; max-width: 500px;">
+              <strong>Mã lỗi kỹ thuật:</strong> <code>TOKEN_ALREADY_USED</code> (HTTP Status 410 Gone).<br>
+              Nếu cần điều chỉnh hàng hóa, vui lòng liên hệ Thủ kho để lập phiếu điều chỉnh mới.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="muc-luc.js"></script>
+<script src="_chung/khung.js"></script>
+</body>
+</html>

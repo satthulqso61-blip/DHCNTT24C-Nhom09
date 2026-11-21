@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>3. Yêu cầu & Quy tắc · StockHub — Quản lý kho hàng</title>
+<link rel="stylesheet" href="_chung/style.css">
+</head>
+<body>
+<div class="khung">
+  <aside class="ben" data-khung-ben>
+    <a class="ben__ten" href="index.html">← Mục lục</a>
+  </aside>
+  <main class="noi-dung" data-khung-noi-dung>
+    <div class="trong">
+      <header class="dau-trang">
+        <div class="dau-trang__nhan">Spec · Phân tích</div>
+        <h1>3. Yêu cầu chức năng & Phi chức năng</h1>
+        <p class="dau-trang__phu">Đặc tả chi tiết các User Story kèm tiêu chí chấp nhận Given/When/Then và các yêu cầu phi chức năng bắt buộc.</p>
+      </header>
+
+      <div class="the the--moi">
+        <strong>Phân quyền 3 vai trò:</strong> Hệ thống tối ưu hóa với 3 vai trò: <code>Admin</code> (Quản trị hệ thống, kho, sản phẩm), <code>WarehouseStaff</code> (Nhân viên kho quản lý xuất nhập và sinh link duyệt), <code>Accountant</code> (Kế toán nhận link 1 lần để duyệt tài chính).
+      </div>
+
+      <h2 id="user-stories">Danh sách User Stories (Chức năng cốt lõi)</h2>
+
+      <!-- US-01 -->
+      <h3 id="us-01">US-01: Đăng nhập & Quản lý phiên làm việc</h3>
+      <p><strong>Là:</strong> Người dùng hệ thống (Admin, WarehouseStaff, Accountant)<br>
+      <strong>Tôi muốn:</strong> Đăng nhập bằng tài khoản và mật khẩu, nhận Access Token (JWT) và Refresh Token<br>
+      <strong>Để:</strong> Truy cập các chức năng được phân quyền an toàn trên Swagger và Giao diện Web.</p>
+      <div class="hop-ghi">
+        <strong>Tiêu chí chấp nhận:</strong>
+        <ul>
+          <li><strong>Given</strong> thông tin đăng nhập đúng (Email/Username và Password), <strong>When</strong> gửi yêu cầu đăng nhập, <strong>Then</strong> hệ thống trả về <code>AccessToken</code> (hạn 15 phút), <code>RefreshToken</code> (hạn 7 ngày) và thông tin vai trò.</li>
+          <li><strong>Given</strong> Access Token hết hạn, <strong>When</strong> client gửi Refresh Token hợp lệ đến <code>/api/v1/auth/refresh</code>, <strong>Then</strong> hệ thống cấp cặp token mới (hỗ trợ refresh token rotation).</li>
+        </ul>
+      </div>
+
+      <!-- US-02 -->
+      <h3 id="us-02">US-02: Quản lý danh mục kho và hàng hóa (Admin)</h3>
+      <p><strong>Là:</strong> Admin<br>
+      <strong>Tôi muốn:</strong> Thêm, sửa, xem danh sách kho hàng và sản phẩm (kèm đơn vị tính, mã SKU)<br>
+      <strong>Để:</strong> Thiết lập dữ liệu cơ sở cho hoạt động nhập xuất kho của doanh nghiệp.</p>
+      <div class="hop-ghi">
+        <strong>Tiêu chí chấp nhận:</strong>
+        <ul>
+          <li><strong>Given</strong> Admin nhập thông tin kho mới (Mã kho, Tên kho, Địa chỉ), <strong>When</strong> bấm Lưu, <strong>Then</strong> hệ thống kiểm tra mã kho không trùng và tạo bản ghi kho mới.</li>
+          <li><strong>Given</strong> sản phẩm đã có giao dịch tồn kho, <strong>When</strong> Admin yêu cầu xóa, <strong>Then</strong> hệ thống thực hiện Soft Delete (đánh dấu <code>IsDeleted = true</code>), không xóa cứng.</li>
+        </ul>
+      </div>
+
+      <!-- US-03 -->
+      <h3 id="us-03">US-03: Tạo phiếu nhập kho nháp (WarehouseStaff)</h3>
+      <p><strong>Là:</strong> WarehouseStaff<br>
+      <strong>Tôi muốn:</strong> Tạo phiếu nhập kho (Goods Receipt) ở trạng thái Nháp (Draft) với danh sách hàng hóa và số lượng<br>
+      <strong>Để:</strong> Kiểm đếm hàng hóa thực tế trước khi gửi Kế toán duyệt ghi sổ.</p>
+      <div class="hop-ghi">
+        <strong>Tiêu chí chấp nhận:</strong>
+        <ul>
+          <li><strong>Given</strong> danh sách dòng chi tiết có số lượng > 0 và đơn giá hợp lệ, <strong>When</strong> tạo phiếu nhập, <strong>Then</strong> phiếu được lưu ở trạng thái <code>Draft</code>, tồn kho chưa thay đổi.</li>
+          <li><strong>Given</strong> phiếu đang ở trạng thái <code>Draft</code>, <strong>When</strong> nhân viên chỉnh sửa số lượng hoặc thêm bớt mặt hàng, <strong>Then</strong> hệ thống cho phép cập nhật bình thường.</li>
+        </ul>
+      </div>
+
+      <!-- US-04 -->
+      <h3 id="us-04">US-04: Tạo phiếu xuất kho & Kiểm soát tồn kho không âm (Quy tắc 1)</h3>
+      <p><strong>Là:</strong> WarehouseStaff<br>
+      <strong>Tôi muốn:</strong> Tạo phiếu xuất kho (Goods Issue) hoặc phiếu điều chuyển kho (Stock Transfer)<br>
+      <strong>Để:</strong> Xuất hàng cho khách hoặc luân chuyển nội bộ mà không bao giờ làm âm kho.</p>
+      <div class="the the--canh-bao">
+        <strong>Quy tắc bất biến 1: Tồn kho không được âm</strong>
+      </div>
+      <div class="hop-ghi">
+        <strong>Tiêu chí chấp nhận:</strong>
+        <ul>
+          <li><strong>Given</strong> sản phẩm A tại Kho 1 có tồn khả dụng là 10 cái, <strong>When</strong> nhân viên tạo phiếu xuất với số lượng 12 cái, <strong>Then</strong> hệ thống từ chối ngay với mã lỗi <code>INSUFFICIENT_STOCK</code> (RFC 9457 ProblemDetails 400), hiển thị tồn hiện tại và số lượng thiếu hụt.</li>
+          <li><strong>Given</strong> sản phẩm B tại Kho 1 có tồn khả dụng là 5 cái, <strong>When</strong> có 2 yêu cầu xuất đồng thời mỗi yêu cầu 4 cái, <strong>Then</strong> cơ chế Concurrency Token (<code>RowVersion</code>) và Transaction chỉ cho phép đúng 1 yêu cầu thành công, yêu cầu còn lại bị chặn và báo lỗi không đủ tồn kho.</li>
+        </ul>
+      </div>
+
+      <!-- US-05 -->
+      <h3 id="us-05">US-05: Cấm chỉnh sửa/xóa phiếu đã duyệt (Quy tắc 2)</h3>
+      <p><strong>Là:</strong> WarehouseStaff hoặc Admin<br>
+      <strong>Tôi muốn:</strong> Đảm bảo phiếu sau khi đã duyệt hoặc từ chối không thể bị thay đổi<br>
+      <strong>Để:</strong> Bảo toàn tính trung thực và bất biến của chứng từ tài chính kế toán.</p>
+      <div class="the the--canh-bao">
+        <strong>Quy tắc bất biến 2: Phiếu đã duyệt không được sửa</strong>
+      </div>
+      <div class="hop-ghi">
+        <strong>Tiêu chí chấp nhận:</strong>
+        <ul>
+          <li><strong>Given</strong> phiếu nhập/xuất đang ở trạng thái <code>Approved</code> hoặc <code>Rejected</code>, <strong>When</strong> bất kỳ ai (kể cả Admin) cố tình gửi request PUT/PATCH/DELETE đến API cập nhật phiếu, <strong>Then</strong> hệ thống trả về mã lỗi <code>400 Bad Request</code> kèm chi tiết <code>VOUCHER_ALREADY_SETTLED_CANNOT_MODIFY</code>.</li>
+          <li><strong>Given</strong> người dùng muốn sửa sai sót của một phiếu đã duyệt, <strong>When</strong> thao tác trên hệ thống, <strong>Then</strong> hệ thống bắt buộc người dùng phải tạo một phiếu bù/điều chỉnh mới ở trạng thái <code>Draft</code> và chờ duyệt lại.</li>
+        </ul>
+      </div>
+
+      <!-- US-06 -->
+      <h3 id="us-06">US-06: Tạo và sao chép liên kết duyệt gửi Kế toán (Quy tắc 3)</h3>
+      <p><strong>Là:</strong> WarehouseStaff<br>
+      <strong>Tôi muốn:</strong> Nhấn nút "Tạo & Sao chép liên kết duyệt" trên phiếu nháp<br>
+      <strong>Để:</strong> Lấy ngay một đường dẫn bảo mật gửi cho Kế toán thẩm định giá trị và duyệt phiếu.</p>
+      <div class="hop-ghi">
+        <strong>Tiêu chí chấp nhận:</strong>
+        <ul>
+          <li><strong>Given</strong> phiếu đang ở trạng thái <code>Draft</code>, <strong>When</strong> nhân viên bấm "Tạo liên kết duyệt", <strong>Then</strong> phiếu chuyển sang trạng thái <code>PendingApproval</code>, hệ thống sinh token ngẫu nhiên bảo mật 64 ký tự (SHA-256 hash lưu DB), trả về URL duyệt định dạng <code>http://localhost:5173/approvals/{token}</code> và tự động sao chép vào bộ nhớ tạm (Clipboard).</li>
+          <li><strong>Given</strong> token được sinh ra, <strong>Then</strong> token có thời hạn hiệu lực mặc định là 24 giờ kể từ thời điểm tạo.</li>
+        </ul>
+      </div>
+
+      <!-- US-07 -->
+      <h3 id="us-07">US-07: Kế toán duyệt hoặc từ chối phiếu qua link 1 lần (Quy tắc 3)</h3>
+      <p><strong>Là:</strong> Accountant<br>
+      <strong>Tôi muốn:</strong> Mở đường dẫn duyệt phiếu, xem toàn bộ chi tiết hàng hóa, tổng giá trị tài chính và bấm "Duyệt phiếu" hoặc "Từ chối"<br>
+      <strong>Để:</strong> Hoàn tất phê duyệt chứng từ kế toán và kích hoạt cập nhật tồn kho chính thức.</p>
+      <div class="hop-ghi">
+        <strong>Tiêu chí chấp nhận:</strong>
+        <ul>
+          <li><strong>Given</strong> Kế toán mở link chứa token hợp lệ chưa sử dụng, <strong>When</strong> bấm "Duyệt phiếu", <strong>Then</strong> hệ thống thực hiện trong 1 Transaction: (1) Cập nhật trạng thái phiếu thành <code>Approved</code>; (2) Cộng/Trừ tồn kho chính thức và ghi sổ <code>StockTransactionHistory</code>; (3) Đánh dấu <code>UsedAt = DateTime.UtcNow</code> trên token; (4) Hiển thị thông báo duyệt thành công.</li>
+          <li><strong>Given</strong> Kế toán mở link và bấm "Từ chối" kèm lý do, <strong>When</strong> xác nhận, <strong>Then</strong> phiếu chuyển sang trạng thái <code>Rejected</code>, không thay đổi tồn kho và token cũng được đánh dấu đã sử dụng ngay lập tức.</li>
+        </ul>
+      </div>
+
+      <!-- US-08 -->
+      <h3 id="us-08">US-08: Thử sử dụng lại liên kết duyệt lần thứ hai (Quy tắc 3)</h3>
+      <p><strong>Là:</strong> Người kiểm thử hoặc người dùng truy cập lại link đã duyệt<br>
+      <strong>Tôi muốn:</strong> Hệ thống ngăn chặn tuyệt đối việc tái sử dụng liên kết<br>
+      <strong>Để:</strong> Loại trừ rủi ro duyệt lặp, cộng/trừ kho nhiều lần ngoài ý muốn.</p>
+      <div class="the the--canh-bao">
+        <strong>Quy tắc bất biến 3: Liên kết duyệt chỉ dùng đúng 1 lần</strong>
+      </div>
+      <div class="hop-ghi">
+        <strong>Tiêu chí chấp nhận:</strong>
+        <ul>
+          <li><strong>Given</strong> một token đã có <code>UsedAt != null</code>, <strong>When</strong> bất kỳ ai mở lại link hoặc gửi API duyệt bằng token đó, <strong>Then</strong> hệ thống từ chối với HTTP <code>410 Gone</code> hoặc <code>400 Bad Request</code> (mã lỗi <code>APPROVAL_TOKEN_ALREADY_USED</code>), hiển thị thông báo rõ ràng "Liên kết này đã được sử dụng vào lúc [UsedAt] và không còn hiệu lực".</li>
+          <li><strong>Given</strong> một token đã quá hạn (<code>ExpiresAt < Now</code>) nhưng chưa dùng, <strong>When</strong> truy cập, <strong>Then</strong> hệ thống từ chối với mã lỗi <code>APPROVAL_TOKEN_EXPIRED</code>.</li>
+        </ul>
+      </div>
+
+      <h2 id="phi-chuc-nang">Yêu cầu phi chức năng (Non-Functional Requirements)</h2>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Hạng mục</th>
+              <th>Tiêu chuẩn kỹ thuật bắt buộc</th>
+              <th>Phương pháp kiểm chứng</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Bảo mật & Auth</strong></td>
+              <td>Xác thực JWT Bearer (15 phút) + Refresh Token (7 ngày) lưu bảng <code>RefreshTokens</code>; Swagger UI tích hợp cấu hình Authorize Bearer.</td>
+              <td>Test xác thực bằng Swagger, kiểm tra tự động refresh token trong axios interceptor khi nhận lỗi 401.</td>
+            </tr>
+            <tr>
+              <td><strong>Hiệu năng & Đồng thời</strong></td>
+              <td>Xử lý tranh chấp ghi (Write Conflict) trên bảng <code>Inventories</code> bằng Optimistic Concurrency; Response time P95 < 200ms cho các thao tác đọc ghi.</td>
+              <td>Viết Integration Test mô phỏng 20-50 luồng xuất đồng thời bằng <code>Task.WhenAll</code>.</td>
+            </tr>
+            <tr>
+              <td><strong>Tính bất biến & Audit</strong></td>
+              <td>Bảng <code>StockTransactionHistory</code> hoạt động theo cơ chế Append-Only (chỉ thêm, cấm sửa xóa) để truy vết mọi biến động kho.</td>
+              <td>Kiểm tra cơ chế chặn lệnh Update/Delete trên bảng lịch sử giao dịch.</td>
+            </tr>
+            <tr>
+              <td><strong>Đóng gói Docker</strong></td>
+              <td>Hệ sinh thái chạy trọn gói bằng đúng 1 câu lệnh duy nhất: <code>docker compose up --build</code> bao gồm: WebApi, Frontend, Database.</td>
+              <td>Chạy thử nghiệm Docker Compose trên môi trường sạch, hệ thống sẵn sàng hoạt động trong < 2 phút.</td>
+            </tr>
+            <tr>
+              <td><strong>Kiểm thử & Coverage</strong></td>
+              <td>Độ bao phủ Unit Test (Code Coverage) đạt $\ge 80\%$ cho tầng Domain & Application (đặc biệt là 3 quy tắc bất biến).</td>
+              <td>Chạy Coverlet sinh báo cáo HTML/LCOV báo cáo tỷ lệ bao phủ.</td>
+            </tr>
+            <tr>
+              <td><strong>Tự động hóa CI</strong></td>
+              <td>GitHub Actions workflow tự động chạy <code>dotnet build</code>, <code>dotnet test</code> và <code>pnpm test</code> mỗi khi có push/pull request.</td>
+              <td>File cấu hình <code>.github/workflows/ci.yml</code> báo trạng thái xanh (Passed).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="muc-luc.js"></script>
+<script src="_chung/khung.js"></script>
+</body>
+</html>

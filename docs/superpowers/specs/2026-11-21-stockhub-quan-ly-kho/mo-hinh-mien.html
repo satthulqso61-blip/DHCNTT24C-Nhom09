@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>4. Mô hình miền · StockHub — Quản lý kho hàng</title>
+<link rel="stylesheet" href="_chung/style.css">
+</head>
+<body>
+<div class="khung">
+  <aside class="ben" data-khung-ben>
+    <a class="ben__ten" href="index.html">← Mục lục</a>
+  </aside>
+  <main class="noi-dung" data-khung-noi-dung>
+    <div class="trong">
+      <header class="dau-trang">
+        <div class="dau-trang__nhan">Spec · Thiết kế</div>
+        <h1>4. Mô hình miền (Domain Model)</h1>
+        <p class="dau-trang__phu">Đặc tả Rich Domain Model, ranh giới Aggregate, Value Object, các quy tắc bất biến và máy trạng thái chứng từ.</p>
+      </header>
+
+      <div class="the">
+        <strong>Nguyên tắc Rich Domain:</strong> Mọi quy tắc kiểm tra tính hợp lệ và biến đổi trạng thái nghiệp vụ (đặc biệt là 3 quy tắc bất biến) nằm trọn vẹn trong các Entity và Aggregate Root của tầng Domain, tuyệt đối không để Anemic Domain Model (không dùng setter public tùy tiện).
+      </div>
+
+      <h2 id="aggregate-roots">Danh sách Aggregate Roots & Entities</h2>
+
+      <!-- Voucher Aggregate -->
+      <h3 id="agg-voucher">1. Aggregate Root: Voucher (Chứng từ kho)</h3>
+      <p>Là đối tượng trung tâm quản lý toàn bộ vòng đời của phiếu nhập kho (Receipt), phiếu xuất kho (Issue) và điều chuyển (Transfer).</p>
+      <ul>
+        <li><strong>Định danh:</strong> <code>VoucherId</code> (Guid)</li>
+        <li><strong>Thuộc tính:</strong>
+          <ul>
+            <li><code>Code</code>: Value Object mã chứng từ (VD: <code>PN-20261121-001</code>, <code>PX-20261121-002</code>).</li>
+            <li><code>Type</code>: Enum <code>VoucherType</code> (<code>Receipt</code>, <code>Issue</code>, <code>Transfer</code>).</li>
+            <li><code>Status</code>: Enum <code>VoucherStatus</code> (<code>Draft</code>, <code>PendingApproval</code>, <code>Approved</code>, <code>Rejected</code>).</li>
+            <li><code>SourceWarehouseId</code>: Guid (Kho xuất/nguồn, rỗng nếu là phiếu nhập).</li>
+            <li><code>TargetWarehouseId</code>: Guid (Kho nhập/đích, rỗng nếu là phiếu xuất).</li>
+            <li><code>Notes</code>: Ghi chú lý do xuất nhập.</li>
+            <li><code>CreatedByUserId</code>, <code>CreatedAt</code>, <code>ApprovedByUserId</code>, <code>ApprovedAt</code>, <code>RejectionReason</code>.</li>
+          </ul>
+        </li>
+        <li><strong>Entity con:</strong> <code>IReadOnlyCollection&lt;VoucherDetail&gt; Details</code> (Danh sách các dòng hàng gồm <code>ProductId</code>, <code>Quantity</code>, <code>UnitPrice</code>).</li>
+        <li><strong>Hành vi nghiệp vụ (Methods):</strong>
+          <ul>
+            <li><code>AddLine(productId, quantity, unitPrice)</code>: Kiểm tra <code>Status == Draft</code>, số lượng > 0. Nếu vi phạm ném <code>VoucherImmutableException</code>.</li>
+            <li><code>SubmitForApproval()</code>: Kiểm tra danh sách mặt hàng không rỗng. Chuyển trạng thái từ <code>Draft</code> sang <code>PendingApproval</code>.</li>
+            <li><code>Approve(approverUserId)</code>: Kiểm tra <code>Status == PendingApproval</code>. Đổi trạng thái sang <code>Approved</code>, gán <code>ApprovedAt = UtcNow</code>. Phát sinh Domain Event <code>VoucherApprovedDomainEvent</code> để kích hoạt cập nhật tồn kho.</li>
+            <li><code>Reject(approverUserId, reason)</code>: Kiểm tra <code>Status == PendingApproval</code>. Đổi trạng thái sang <code>Rejected</code>, ghi nhận lý do. Phát sinh Domain Event <code>VoucherRejectedDomainEvent</code>.</li>
+          </ul>
+        </li>
+      </ul>
+
+      <!-- Inventory Aggregate -->
+      <h3 id="agg-inventory">2. Aggregate Root: Inventory (Tồn kho)</h3>
+      <p>Quản lý số lượng tồn của một mặt hàng cụ thể tại một kho cụ thể.</p>
+      <ul>
+        <li><strong>Định danh kép (Composite Key):</strong> <code>WarehouseId</code> + <code>ProductId</code>.</li>
+        <li><strong>Thuộc tính:</strong>
+          <ul>
+            <li><code>QuantityOnHand</code>: Số lượng thực tế trong kho.</li>
+            <li><code>QuantityReserved</code>: Số lượng đã được giữ chỗ cho các phiếu xuất đang chờ duyệt.</li>
+            <li><code>RowVersion</code>: Concurrency Token kiểu byte array (hoặc <code>uint xmin</code> trên PostgreSQL) để phát hiện xung đột ghi đồng thời.</li>
+          </ul>
+        </li>
+        <li><strong>Hành vi nghiệp vụ (Bảo vệ Quy tắc 1):</strong>
+          <ul>
+            <li><code>EnsureSufficientStock(requestedQty)</code>: Kiểm tra <code>(QuantityOnHand - QuantityReserved) &gt;= requestedQty</code>. Nếu không thỏa mãn, ném <code>InsufficientStockException</code>.</li>
+            <li><code>DeductStock(quantity)</code>: Trừ trực tiếp <code>QuantityOnHand -= quantity</code>. Đảm bảo điều kiện bất biến <code>QuantityOnHand &gt;= 0</code> luôn luôn đúng sau phép tính.</li>
+            <li><code>AddStock(quantity)</code>: Cộng <code>QuantityOnHand += quantity</code> khi phiếu nhập được duyệt.</li>
+          </ul>
+        </li>
+      </ul>
+
+      <!-- ApprovalToken Entity -->
+      <h3 id="ent-token">3. Entity: ApprovalToken (Mã duyệt bảo mật một lần)</h3>
+      <p>Quản lý quyền truy cập và tính sử dụng một lần của liên kết gửi Kế toán (Quy tắc 3).</p>
+      <ul>
+        <li><strong>Định danh:</strong> <code>TokenId</code> (Guid).</li>
+        <li><strong>Thuộc tính:</strong>
+          <ul>
+            <li><code>VoucherId</code>: Tham chiếu đến chứng từ cần duyệt.</li>
+            <li><code>TokenHash</code>: Chuỗi băm SHA-256 của token ngẫu nhiên bảo mật (để chống lộ token nếu bị đọc trộm DB).</li>
+            <li><code>ExpiresAt</code>: Thời điểm hết hạn (UTC), mặc định $Now + 24$ giờ.</li>
+            <li><code>UsedAt</code>: Thời điểm token được sử dụng (nullable UTC).</li>
+            <li><code>CreatedAt</code>: Thời điểm khởi tạo.</li>
+          </ul>
+        </li>
+        <li><strong>Hành vi nghiệp vụ:</strong>
+          <ul>
+            <li><code>Consume()</code>: Kiểm tra nếu <code>UsedAt.HasValue</code> thì ném ngay <code>ApprovalTokenAlreadyUsedException</code>; nếu <code>ExpiresAt &lt; DateTime.UtcNow</code> thì ném <code>ApprovalTokenExpiredException</code>. Nếu hợp lệ, gán <code>UsedAt = DateTime.UtcNow</code>.</li>
+          </ul>
+        </li>
+      </ul>
+
+      <!-- Value Objects -->
+      <h2 id="value-objects">Value Objects (Đối tượng giá trị)</h2>
+      <div class="bang-boc">
+        <table>
+          <thead>
+            <tr>
+              <th>Value Object</th>
+              <th>Thuộc tính</th>
+              <th>Quy tắc bất biến</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>VoucherCode</code></td>
+              <td><code>string Value</code></td>
+              <td>Định dạng <code>{TYPE}-{yyyyMMdd}-{XXXX}</code> (VD: <code>PN-20261121-0001</code>). Không được rỗng, không chứa ký tự đặc biệt ngoài gạch nối.</td>
+            </tr>
+            <tr>
+              <td><code>SKU</code></td>
+              <td><code>string Value</code></td>
+              <td>Từ 3 đến 30 ký tự, viết hoa, chỉ gồm chữ cái, số và dấu gạch nối (VD: <code>LAPTOP-DELL-5520</code>).</td>
+            </tr>
+            <tr>
+              <td><code>Money</code></td>
+              <td><code>decimal Amount</code>, <code>string Currency</code></td>
+              <td>Số tiền <code>Amount &gt;= 0</code>, làm tròn 2 chữ số thập phân, tiền tệ mặc định <code>VND</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- State Machine Diagram -->
+      <h2 id="so-do-trang-thai">Sơ đồ máy trạng thái chứng từ (Voucher State Diagram)</h2>
+      <p>Sơ đồ sau minh họa luồng chuyển trạng thái và các rào cản ngăn chặn vi phạm 3 quy tắc:</p>
+      
+      <div class="so-do-hop">
+        <svg viewBox="0 0 850 260" width="100%" height="240" xmlns="http://www.w3.org/2000/svg">
+          <!-- Definitions for markers -->
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb" />
+            </marker>
+            <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a" />
+            </marker>
+            <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#dc2626" />
+            </marker>
+          </defs>
+
+          <!-- State: Start -->
+          <circle cx="50" cy="120" r="14" fill="#64748b" />
+          <path d="M 64 120 L 110 120" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)" />
+
+          <!-- State: Draft -->
+          <rect x="110" y="85" width="160" height="70" rx="10" fill="#f8fafc" stroke="#2563eb" stroke-width="2" />
+          <text x="190" y="115" font-family="sans-serif" font-weight="bold" font-size="14" text-anchor="middle" fill="#1e293b">DRAFT (Nháp)</text>
+          <text x="190" y="135" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#64748b">Cho phép sửa & xóa</text>
+
+          <!-- Transition: Submit -->
+          <path d="M 270 120 L 360 120" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)" />
+          <text x="315" y="110" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#2563eb" font-weight="600">Tạo link duyệt</text>
+
+          <!-- State: PendingApproval -->
+          <rect x="360" y="85" width="200" height="70" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="2" />
+          <text x="460" y="115" font-family="sans-serif" font-weight="bold" font-size="14" text-anchor="middle" fill="#92400e">PENDING APPROVAL</text>
+          <text x="460" y="135" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#b45309">Chờ Kế toán duyệt 1 lần</text>
+
+          <!-- Transition: Approve (to Approved) -->
+          <path d="M 560 105 L 640 65" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)" />
+          <text x="600" y="70" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#16a34a" font-weight="600">Kế toán Duyệt</text>
+
+          <!-- State: Approved -->
+          <rect x="640" y="30" width="190" height="70" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="2" />
+          <text x="735" y="60" font-family="sans-serif" font-weight="bold" font-size="14" text-anchor="middle" fill="#166534">APPROVED (Đã duyệt)</text>
+          <text x="735" y="80" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#15803d">Cập nhật kho · Bất biến</text>
+
+          <!-- Transition: Reject (to Rejected) -->
+          <path d="M 560 135 L 640 175" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-red)" />
+          <text x="600" y="180" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#dc2626" font-weight="600">Từ chối</text>
+
+          <!-- State: Rejected -->
+          <rect x="640" y="150" width="190" height="70" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="2" />
+          <text x="735" y="180" font-family="sans-serif" font-weight="bold" font-size="14" text-anchor="middle" fill="#991b1b">REJECTED (Từ chối)</text>
+          <text x="735" y="200" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#b91c1c">Không đổi kho · Đóng phiếu</text>
+
+          <!-- Forbidden Loop: Cannot edit Approved/Rejected -->
+          <path d="M 735 100 L 735 130" stroke="#991b1b" stroke-width="1.5" stroke-dasharray="4" />
+          <text x="735" y="125" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#991b1b" font-weight="bold">CẤM CHỈNH SỬA / XÓA</text>
+        </svg>
+      </div>
+
+      <h2 id="quy-tac-bat-bien-trong-domain">Hiện thực các quy tắc bất biến trong Code</h2>
+      <pre><code>// Minh họa logic nghiệp vụ bất biến tại Domain Entity Voucher
+public sealed class Voucher : AggregateRoot&lt;Guid&gt;
+{
+    private readonly List&lt;VoucherDetail&gt; _details = new();
+    public IReadOnlyCollection&lt;VoucherDetail&gt; Details =&gt; _details.AsReadOnly();
+    public VoucherStatus Status { get; private set; } = VoucherStatus.Draft;
+
+    public void AddDetail(Guid productId, decimal quantity, decimal unitPrice)
+    {
+        if (Status != VoucherStatus.Draft)
+        {
+            throw new VoucherImmutableException(
+                $"Phiếu {Code} đang ở trạng thái {Status}, không được phép sửa đổi theo Quy tắc 2.");
+        }
+        if (quantity &lt;= 0)
+        {
+            throw new DomainRuleException("Số lượng hàng hóa phải lớn hơn 0.");
+        }
+        _details.Add(new VoucherDetail(Id, productId, quantity, unitPrice));
+    }
+
+    public void Approve(Guid accountantUserId)
+    {
+        if (Status != VoucherStatus.PendingApproval)
+        {
+            throw new InvalidVoucherStateException(
+                $"Chỉ phiếu đang chờ duyệt mới có thể phê duyệt. Trạng thái hiện tại: {Status}.");
+        }
+        Status = VoucherStatus.Approved;
+        ApprovedByUserId = accountantUserId;
+        ApprovedAt = DateTime.UtcNow;
+
+        // Bắn domain event cập nhật kho và lưu audit log
+        AddDomainEvent(new VoucherApprovedDomainEvent(Id, Type, SourceWarehouseId, TargetWarehouseId, _details));
+    }
+}</code></pre>
+    </div>
+  </main>
+</div>
+<script src="muc-luc.js"></script>
+<script src="_chung/khung.js"></script>
+</body>
+</html>
