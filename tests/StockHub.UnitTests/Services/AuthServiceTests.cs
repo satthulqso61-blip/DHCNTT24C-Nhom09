@@ -387,6 +387,16 @@ public class AuthServiceTests : IDisposable
         accountant!.Role.Should().Be(UserRole.Accountant);
         accountant.Email.Should().Be("accountant@stockhub.local");
         passwordHasher.VerifyPassword("accountant", accountant.PasswordHash).Should().BeTrue();
+
+        // Verify Warehouses seeded (3 warehouses)
+        var warehouses = await _dbContext.Warehouses.ToListAsync();
+        warehouses.Should().HaveCount(3);
+        warehouses.Select(w => w.Code).Should().Contain(new[] { "WH-CENTRAL", "WH-NORTH", "WH-SOUTH" });
+
+        // Verify Products seeded (10 sample SKUs)
+        var products = await _dbContext.Products.ToListAsync();
+        products.Should().HaveCount(10);
+        products.Should().OnlyContain(p => !p.IsDeleted);
     }
 
     #endregion
