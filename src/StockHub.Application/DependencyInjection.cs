@@ -22,6 +22,8 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(assembly);
 
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<Features.Warehouses.Services.IWarehouseService, Features.Warehouses.Services.WarehouseService>();
+        services.AddScoped<Features.Products.Services.IProductService, Features.Products.Services.ProductService>();
 
         return services;
     }
